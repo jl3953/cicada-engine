@@ -22,6 +22,11 @@ struct RowCommon {
   RowVersion<StaticConfig>* volatile older_rv;
 };
 
+/**
+ * jenncomment A version of the row in an mvcc scheme
+ *
+ * @tparam StaticConfig
+ */
 template <class StaticConfig>
 struct RowVersion : public RowCommon<StaticConfig> {
   typename StaticConfig::Timestamp wts;
@@ -38,11 +43,23 @@ struct RowVersion : public RowCommon<StaticConfig> {
   char data[0] __attribute__((aligned(8)));
 };  // Alignment of Rows is handled by the row pool manually.
 
+
+/**
+ * jenncomment probably the head of all the versions? The head version?
+ * Or just some pointer to the most current version?
+ *
+ * @tparam StaticConfig
+ */
 template <class StaticConfig>
 struct RowHead : public RowCommon<StaticConfig> {
   RowVersion<StaticConfig> inlined_rv[0] __attribute__((aligned(8)));
 };  // Alignment of Rows is handled by the table manually.
 
+/**
+ * jenncomment probably stands for "row garbage collection info"
+ *
+ * @tparam StaticConfig
+ */
 template <class StaticConfig>
 struct RowGCInfo {
   typename StaticConfig::ConcurrentTimestamp gc_ts;

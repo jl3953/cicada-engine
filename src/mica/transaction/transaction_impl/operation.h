@@ -26,6 +26,8 @@ bool Transaction<StaticConfig>::new_row(RAH& rah, Table<StaticConfig>* tbl,
   if (cf_id == 0) {
     if (row_id != kNewRowID) return false;
 
+    // jenncomment allocating a row for given table tbl
+
     row_id = ctx_->allocate_row(tbl);
     if (row_id == static_cast<uint64_t>(-1)) {
       // TODO: Use different stats counter.
@@ -40,8 +42,11 @@ bool Transaction<StaticConfig>::new_row(RAH& rah, Table<StaticConfig>* tbl,
     if (row_id == kNewRowID) return false;
   }
 
+  // jenncomment allocate a head, even though I still don't know what
+  // function head serves
   auto head = tbl->head(cf_id, row_id);
 
+  // jenncomment allocating a write version
   auto write_rv =
       ctx_->allocate_version_for_new_row(tbl, cf_id, row_id, head, data_size);
   if (write_rv == nullptr) {
@@ -50,7 +55,7 @@ bool Transaction<StaticConfig>::new_row(RAH& rah, Table<StaticConfig>* tbl,
     return false;
   }
 
-  write_rv->older_rv = nullptr;
+  write_rv->older_rv = nullptr;  // jenncomment, probably previous version of row
   write_rv->wts = ts_;
   write_rv->rts.init(ts_);
   write_rv->status = RowVersionStatus::kPending;
@@ -111,16 +116,24 @@ bool Transaction<StaticConfig>::new_row(RAH& rah, Table<StaticConfig>* tbl,
   }
 
   // assert(access_size_ < StaticConfig::kMaxAccessSize);
+  // jenncomment not really a relevant check for jenn
   if (access_size_ >= StaticConfig::kMaxAccessSize) {
     printf("too large access\n");
     assert(false);
   }
   iset_idx_[iset_size_++] = access_size_;
   rah.access_item_ = &accesses_[access_size_];
-  accesses_[access_size_] = {access_size_, 0,     RowAccessState::kNew,
-                             tbl,          cf_id, row_id,
-                             head,         head,  write_rv,
-                             nullptr /*, ts_*/};
+  accesses_[access_size_] = {access_size_, /* i */
+                             0, /* inserted */
+                             RowAccessState::kNew, /* state */
+                             tbl, /* tbl */
+                             cf_id, /* cf_id */
+                             row_id, /* row_id */
+                             head, /* head */
+                             head, /* newer_rv */
+                             write_rv, /* write_rv */
+                             nullptr /* read_rv */
+                             /*, ts_*/};
   access_size_++;
 
   return true;
@@ -408,7 +421,8 @@ bool Transaction<StaticConfig>::write_row(RAH& rah, uint64_t data_size,
   auto item = rah.access_item_;
 
   // New rows are writable by default.
-  if (item->state == RowAccessState::kNew) return true;
+  if (item->state == RowAccessState::kNew)
+      return true;
 
   // OK to write twice.
   if (item->state == RowAccessState::kWrite ||

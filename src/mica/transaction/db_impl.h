@@ -139,6 +139,13 @@ bool DB<StaticConfig>::create_btree_index_nonunique_u64(
   return true;
 }
 
+/**
+ * I think this method "activates" a thread to start doing whatever
+ * in the database.
+ *
+ * @tparam StaticConfig
+ * @param thread_id
+ */
 template <class StaticConfig>
 void DB<StaticConfig>::activate(uint16_t thread_id) {
   // printf("DB::activate(): thread_id=%hu\n", thread_id);
