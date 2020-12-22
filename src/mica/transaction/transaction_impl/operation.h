@@ -213,6 +213,8 @@ bool Transaction<StaticConfig>::peek_row(RAH& rah, Table<StaticConfig>* tbl,
     (void)alt_head;
   }
   RowCommon<StaticConfig>* newer_rv = head;
+  if (!head) {
+  }
   auto rv = head->older_rv;
   // auto head_older = rv;
   // auto latest_wts = rv->wts;

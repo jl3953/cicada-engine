@@ -143,7 +143,8 @@ RowHead<StaticConfig>* Table<StaticConfig>::head(uint16_t cf_id,
   //     cf.inlining && cf.rh_size > 192)
   //   __builtin_prefetch(h + 192, 0, 3);
 
-  return reinterpret_cast<RowHead<StaticConfig>*>(h);
+  auto temp = reinterpret_cast<RowHead<StaticConfig>*>(h);
+  return temp;
 }
 
 template <class StaticConfig>
