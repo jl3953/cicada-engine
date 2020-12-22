@@ -3,7 +3,7 @@
 #include <random>
 #include "mica/transaction/db.h"
 #include "mica/util/lcore.h"
-#include "mica/util/zipf.h"
+//#include "mica/util/zipf.h"
 #include "mica/util/rand.h"
 #include "mica/test/test_tx_conf.h"
 
