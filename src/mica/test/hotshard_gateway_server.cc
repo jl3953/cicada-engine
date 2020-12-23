@@ -27,6 +27,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <stdlib.h>
 
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -62,11 +63,62 @@ typedef ::mica::transaction::Result Result;
 
 static ::mica::util::Stopwatch sw;
 
+HashIndex* hash_idx = nullptr;
+DB* db_ptr = nullptr;
+
+
 // Logic and data behind the server's behavior.
 class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
   Status ContactHotshard(ServerContext* context, const HotshardRequest* request,
                   HotshardReply* reply) override {
-    reply->set_is_committed(true);
+
+      auto tbl = db_ptr->get_table("main");
+
+      ::mica::util::lcore.pin_thread(0);
+
+      db_ptr->activate(static_cast<uint16_t>(0));
+      Transaction tx(db_ptr->context(0));
+
+      RowAccessHandle rah(&tx);
+      bool ret_jenn = tx.begin();
+      if (!ret_jenn)
+          printf("jenndebug tx.begin() screwed up\n");
+
+      if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
+                       kDataSize)) {
+          printf("jenndebug rah screwed up\n");
+      }
+
+      uint64_t key = uint64_t(rand());
+      uint64_t value = 214;
+
+      auto ret = hash_idx->insert(&tx, key, value);
+      if (ret != 1) {
+          printf("jenndebug uh oh insert %lu failed\n", key);
+      }
+
+      Result result;
+      tx.commit(&result);
+
+      // check
+      tx.begin();
+      uint64_t looked_value = 0;
+      auto lookup_result =
+              hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
+                               [&looked_value](auto& k, auto& v) {
+                                   (void)k;
+                                   looked_value = v;
+                                   return false;
+                               });
+      tx.commit();
+      if (value == looked_value) {
+          printf("jenndebug ok we did it, value %lu, looked_value %lu\n", value, looked_value);
+      } else {
+          printf("jenndebug oh we screwed up, value %lu, looked_value %lu\n", value, looked_value);
+      }
+
+    reply->set_is_committed(Result::kCommitted == result);
+      reply->set_is_committed(true);
     HLCTimestamp *hlcTimestamp = new HLCTimestamp(request->hlctimestamp());
     reply->set_allocated_hlctimestamp(hlcTimestamp);
     return Status::OK;
@@ -102,18 +154,18 @@ int main(int argc, char** argv) {
     double read_ratio = /*atof(argv[3]);*/ 95;
     double zipf_theta = /*atof(argv[4]);*/ 0.5;
     uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 1;
-    uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 1;
+    uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
 
     Alloc alloc(config.get("alloc"));
     auto page_pool_size = 24 * uint64_t(1073741824);
     PagePool* page_pools[2];
-    // if (num_threads == 1) {
-    //   page_pools[0] = new PagePool(&alloc, page_pool_size, 0);
-    //   page_pools[1] = nullptr;
-    // } else {
-    page_pools[0] = new PagePool(&alloc, page_pool_size / 2, 0);
-    page_pools[1] = new PagePool(&alloc, page_pool_size / 2, 1);
-    // }
+     if (num_threads == 1) {
+       page_pools[0] = new PagePool(&alloc, page_pool_size, 0);
+       page_pools[1] = nullptr;
+     } else {
+        page_pools[0] = new PagePool(&alloc, page_pool_size / 2, 0);
+        page_pools[1] = new PagePool(&alloc, page_pool_size / 2, 1);
+     }
 
     ::mica::util::lcore.pin_thread(0);
 
@@ -145,7 +197,10 @@ int main(int argc, char** argv) {
     printf("\n");
 
     Logger logger;
-    DB db(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
+    db_ptr = new DB(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
+    DB &db = *db_ptr;
+    // DB db(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
+
 
     const uint64_t data_sizes[] = {kDataSize};
     bool ret = db.create_table("main", 1, data_sizes);
@@ -157,7 +212,7 @@ int main(int argc, char** argv) {
     db.activate(0);
 
     // jenncomment hash_idx is on a certain table
-    HashIndex* hash_idx = nullptr;
+
     if (kUseHashIndex) {
         bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
         assert(ret);
@@ -235,15 +290,7 @@ int main(int argc, char** argv) {
                                     printf("jenndebug inserted (%lu, %lu)\n", row_id_jenn, value_jenn);
                                 }
                             }
-//                            if (kUseBTreeIndex) {
-//                                auto ret = btree_idx->insert(&tx, row_ids[j], rah.row_id());
-//                                if (ret != 1 || ret == BTreeIndex::kHaveToAbort) {
-//                                    // printf("failed to update index row = %" PRIu64 "\n", j);
-//                                    aborted = true;
-//                                    tx.abort();
-//                                    break;
-//                                }
-//                            }
+
                         }
 
                         if (aborted) continue;
@@ -282,6 +329,7 @@ int main(int argc, char** argv) {
                 return 0;
             });
         }
+        printf("jenndebug 3\n");
 
         while (threads.size() > 0) {
             threads.back().join();
@@ -300,15 +348,13 @@ int main(int argc, char** argv) {
             hash_idx->index_table()->renew_rows(db.context(0), 0, i,
                                                 static_cast<uint64_t>(-1), false);
         }
-//        if (btree_idx != nullptr) {
-//            uint64_t i = 0;
-//            btree_idx->index_table()->renew_rows(db.context(0), 0, i,
-//                                                 static_cast<uint64_t>(-1), false);
-//        }
+
         db.deactivate(0);
 
         db.reset_stats();
         db.reset_backoff();
+
+        printf("jenndebug 4\n");
     }
 
   RunServer();
