@@ -133,7 +133,7 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
           uint64_t value = new_rows[i].value();
 
           auto ret = hash_idx->insert(&tx, key, value);
-          if (ret >= 1) {
+          if (ret != 1) {
               printf("jenndebug new row insert(%lu, %lu) failed\n", key, value);
               reply->set_is_committed(false);
               return Status::OK;
@@ -156,7 +156,7 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
                                        return true;
                                 });
 
-          if (lookup_result != 1) {
+          if (lookup_result < 1) {
               printf("jenndebug lookup(%lu) no value\n", key);
           } else {
               printf("jenndebug lookup(%lu) = %lu\n", key, looked_value);
