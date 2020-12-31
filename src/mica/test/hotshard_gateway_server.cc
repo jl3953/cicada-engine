@@ -81,47 +81,87 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
 
       RowAccessHandle rah(&tx);
       bool ret_jenn = tx.begin();
-      if (!ret_jenn)
-          printf("jenndebug tx.begin() screwed up\n");
-
-      if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
-                       kDataSize)) {
-          printf("jenndebug rah screwed up\n");
+      if (!ret_jenn) {
+          printf("jenndebug tx.begin() failed.\n");
+          reply->set_is_committed(false);
+          return Status::OK;
       }
 
-      uint64_t key = uint64_t(rand());
-      uint64_t value = 214;
+      for (int i = 0; i < request->write_keyset_size(); i++) {
 
-      auto ret = hash_idx->insert(&tx, key, value);
-      if (ret != 1) {
-          printf("jenndebug uh oh insert %lu failed\n", key);
+          // TODO jenndebug what about duplicate rows? Do they still need new_row()?
+          if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
+                           kDataSize)) {
+              printf("jenndebug RowAccessHandle.new_row() failed\n");
+              reply->set_is_committed(false);
+              return Status::OK;
+          }
+
+          uint64_t key = request->write_keyset(i).key();
+          uint64_t value = request->write_keyset(i).value();
+
+          auto ret = hash_idx->insert(&tx, key, value);
+          if (ret != 1) {
+              printf("jenndebug hash_index->insert(%lu, %lu) failed\n", key, value);
+              reply->set_is_committed(false);
+              return Status::OK;
+          } else {
+              printf("jenndebug hash_index->insert(%lu, %lu) succeeded\n", key, value);
+          }
+      }
+
+      for (int i = 0; i < request->read_keyset_size(); i++) {
+          uint64_t looked_value = 0;
+          uint64_t key = request->read_keyset(i);
+          auto lookup_result =
+                  hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
+                                   [&looked_value](auto& k, auto& v) {
+                                       (void)k;
+                                       looked_value = v;
+                                       return false;
+                                });
+
+          if (lookup_result != 1) {
+              printf("jenndebug lookup(%lu) failed\n", key);
+              reply->set_is_committed(false);
+              return Status::OK;
+          } else {
+              printf("jenndebug lookup(%lu) = %lu\n", key, looked_value);
+          }
+
+          smdbrpc::KVPair* kvPair = reply->add_read_valueset();
+          kvPair->set_key(key);
+          kvPair->set_value(looked_value);
       }
 
       Result result;
       tx.commit(&result);
 
-      // check
-      tx.begin();
-      uint64_t looked_value = 0;
-      auto lookup_result =
-              hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
-                               [&looked_value](auto& k, auto& v) {
-                                   (void)k;
-                                   looked_value = v;
-                                   return false;
-                               });
-      tx.commit();
-      if (value == looked_value) {
-          printf("jenndebug ok we did it, value %lu, looked_value %lu\n", value, looked_value);
-      } else {
-          printf("jenndebug oh we screwed up, value %lu, looked_value %lu\n", value, looked_value);
-      }
-
-    reply->set_is_committed(Result::kCommitted == result);
       reply->set_is_committed(true);
-    HLCTimestamp *hlcTimestamp = new HLCTimestamp(request->hlctimestamp());
-    reply->set_allocated_hlctimestamp(hlcTimestamp);
-    return Status::OK;
+      return Status::OK;
+
+      // check
+//      tx.begin();
+//      uint64_t looked_value = 0;
+//      auto lookup_result =
+//              hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
+//                               [&looked_value](auto& k, auto& v) {
+//                                   (void)k;
+//                                   looked_value = v;
+//                                   return false;
+//                               });
+//      tx.commit();
+//      if (value == looked_value) {
+//          printf("jenndebug ok we did it, value %lu, looked_value %lu\n", value, looked_value);
+//      } else {
+//          printf("jenndebug oh we screwed up, value %lu, looked_value %lu\n", value, looked_value);
+//      }
+//
+//    reply->set_is_committed(Result::kCommitted == result);
+//      reply->set_is_committed(true);
+//    HLCTimestamp *hlcTimestamp = new HLCTimestamp(request->hlctimestamp());
+//    reply->set_allocated_hlctimestamp(hlcTimestamp);
+//    return Status::OK;
   }
 };
 
