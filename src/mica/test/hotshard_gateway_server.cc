@@ -52,7 +52,8 @@ typedef DBConfig::Timing Timing;
 typedef ::mica::transaction::PagePool<DBConfig> PagePool;
 typedef ::mica::transaction::DB<DBConfig> DB;
 typedef ::mica::transaction::Table<DBConfig> Table;
-typedef DB::HashIndexUniqueU64 HashIndex;
+// typedef DB::HashIndexUniqueU64 HashIndex;
+typedef DB::HashIndexNonuniqueU64 HashIndex;
 typedef DB::BTreeIndexUniqueU64 BTreeIndex;
 typedef ::mica::transaction::RowVersion<DBConfig> RowVersion;
 typedef ::mica::transaction::RowAccessHandle<DBConfig> RowAccessHandle;
@@ -87,15 +88,15 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
           return Status::OK;
       }
 
-      for (int i = 0; i < request->write_keyset_size(); i++) {
+      // TODO jenndebug what about duplicate rows? Do they still need new_row()?
+      if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
+                       kDataSize)) {
+          printf("jenndebug RowAccessHandle.new_row() failed\n");
+          reply->set_is_committed(false);
+          return Status::OK;
+      }
 
-          // TODO jenndebug what about duplicate rows? Do they still need new_row()?
-          if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
-                           kDataSize)) {
-              printf("jenndebug RowAccessHandle.new_row() failed\n");
-              reply->set_is_committed(false);
-              return Status::OK;
-          }
+      for (int i = 0; i < request->write_keyset_size(); i++) {
 
           uint64_t key = request->write_keyset(i).key();
           uint64_t value = request->write_keyset(i).value();
@@ -122,16 +123,14 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
                                 });
 
           if (lookup_result != 1) {
-              printf("jenndebug lookup(%lu) failed\n", key);
-              reply->set_is_committed(false);
-              return Status::OK;
+              printf("jenndebug lookup(%lu) no value\n", key);
           } else {
               printf("jenndebug lookup(%lu) = %lu\n", key, looked_value);
-          }
 
-          smdbrpc::KVPair* kvPair = reply->add_read_valueset();
-          kvPair->set_key(key);
-          kvPair->set_value(looked_value);
+              smdbrpc::KVPair *kvPair = reply->add_read_valueset();
+              kvPair->set_key(key);
+              kvPair->set_value(looked_value);
+          }
       }
 
       Result result;
@@ -254,11 +253,13 @@ int main(int argc, char** argv) {
     // jenncomment hash_idx is on a certain table
 
     if (kUseHashIndex) {
-        bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+        // bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+        bool ret = db.create_hash_index_nonunique_u64("main_idx", tbl, num_rows);
         assert(ret);
         (void)ret;
 
-        hash_idx = db.get_hash_index_unique_u64("main_idx");
+        //hash_idx = db.get_hash_index_unique_u64("main_idx");
+        hash_idx = db.get_hash_index_nonunique_u64("main_idx");
         Transaction tx(db.context(0));
         hash_idx->init(&tx);
     }
