@@ -120,8 +120,8 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
       }
 
       // insertion of new rows
-      if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
-                       kDataSize)) {
+      if (!new_rows.empty() && !rah.new_row(tbl, 0, Transaction::kNewRowID,
+                                            false, kDataSize)) {
           printf("jenndebug RowAccessHandle.new_row() failed\n");
           reply->set_is_committed(false);
           return Status::OK;
@@ -153,10 +153,10 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
                                    [&looked_value](auto& k, auto& v) {
                                        (void)k;
                                        looked_value = v;
-                                       return false;
+                                       return true;
                                 });
 
-          if (lookup_result != 1) {
+          if (lookup_result < 1) {
               printf("jenndebug lookup(%lu) no value\n", key);
           } else {
               printf("jenndebug lookup(%lu) = %lu\n", key, looked_value);
