@@ -52,8 +52,8 @@ typedef DBConfig::Timing Timing;
 typedef ::mica::transaction::PagePool<DBConfig> PagePool;
 typedef ::mica::transaction::DB<DBConfig> DB;
 typedef ::mica::transaction::Table<DBConfig> Table;
-typedef DB::HashIndexUniqueU64 HashIndex;
-//typedef DB::HashIndexNonuniqueU64 HashIndex;
+// typedef DB::HashIndexUniqueU64 HashIndex;
+typedef DB::HashIndexNonuniqueU64 HashIndex;
 typedef DB::BTreeIndexUniqueU64 BTreeIndex;
 typedef ::mica::transaction::RowVersion<DBConfig> RowVersion;
 typedef ::mica::transaction::RowAccessHandle<DBConfig> RowAccessHandle;
@@ -133,7 +133,7 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
           uint64_t value = new_rows[i].value();
 
           auto ret = hash_idx->insert(&tx, key, value);
-          if (ret != 1) {
+          if (ret >= 1) {
               printf("jenndebug new row insert(%lu, %lu) failed\n", key, value);
               reply->set_is_committed(false);
               return Status::OK;
@@ -265,13 +265,13 @@ int main(int argc, char** argv) {
     // jenncomment hash_idx is on a certain table
 
     if (kUseHashIndex) {
-        bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
-        //bool ret = db.create_hash_index_nonunique_u64("main_idx", tbl, num_rows);
+        // bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+        bool ret = db.create_hash_index_nonunique_u64("main_idx", tbl, num_rows);
         assert(ret);
         (void)ret;
 
-        hash_idx = db.get_hash_index_unique_u64("main_idx");
-        //hash_idx = db.get_hash_index_nonunique_u64("main_idx");
+        //hash_idx = db.get_hash_index_unique_u64("main_idx");
+        hash_idx = db.get_hash_index_nonunique_u64("main_idx");
         Transaction tx(db.context(0));
         hash_idx->init(&tx);
     }

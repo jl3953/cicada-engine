@@ -40,9 +40,13 @@ uint64_t HashIndex<StaticConfig, UniqueKey, Key, Hash, KeyEqual>::lookup(
        printf("HashIndex::lookup() key=%" PRIu64 " bucket_key=%" PRIu64
               " value=%" PRIu64 "\n",
               key, bkt->keys[j], bkt->values[j]);
-      if (!key_equal_(bkt->keys[j], key)) continue;
+      if (!key_equal_(bkt->keys[j], key)) {
+          continue;
+      }
 
-      if (bkt->values[j] == kNullRowID) continue;
+      if (bkt->values[j] == kNullRowID) {
+          continue;
+      }
 
       auto value = bkt->values[j];
 
