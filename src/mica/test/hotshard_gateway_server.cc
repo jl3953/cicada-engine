@@ -153,7 +153,7 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
                                    [&looked_value](auto& k, auto& v) {
                                        (void)k;
                                        looked_value = v;
-                                       return false;
+                                       return true;
                                 });
 
           if (lookup_result != 1) {

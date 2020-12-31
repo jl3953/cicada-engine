@@ -37,9 +37,9 @@ uint64_t HashIndex<StaticConfig, UniqueKey, Key, Hash, KeyEqual>::lookup(
     }
 
     for (size_t j = 0; j < Bucket::kBucketSize; j++) {
-      // printf("HashIndex::lookup() key=%" PRIu64 " bucket_key=%" PRIu64
-      //        " value=%" PRIu64 "\n",
-      //        key, bkt->keys[i], bkt->values[i]);
+       printf("HashIndex::lookup() key=%" PRIu64 " bucket_key=%" PRIu64
+              " value=%" PRIu64 "\n",
+              key, bkt->keys[j], bkt->values[j]);
       if (!key_equal_(bkt->keys[j], key)) continue;
 
       if (bkt->values[j] == kNullRowID) continue;
@@ -52,7 +52,9 @@ uint64_t HashIndex<StaticConfig, UniqueKey, Key, Hash, KeyEqual>::lookup(
       }
 
       found++;
-      if (!func(bkt->keys[j], value)) return found;
+      if (!func(bkt->keys[j], value)) {
+          return found;
+      }
       if (UniqueKey) {
         // There will be no matching key.
         return found;
