@@ -253,7 +253,8 @@ int main(int argc, char** argv) {
     // jenncomment hash_idx is on a certain table
 
     if (kUseHashIndex) {
-        bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+        // bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+        bool ret = db.create_hash_index_nonunique_u64("main_idx", tbl, num_rows);
         assert(ret);
         (void)ret;
 
