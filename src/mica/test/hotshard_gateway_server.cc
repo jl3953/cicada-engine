@@ -120,8 +120,8 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
       }
 
       // insertion of new rows
-      if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
-                       kDataSize)) {
+      if (!new_rows.empty() && !rah.new_row(tbl, 0, Transaction::kNewRowID,
+                                            false, kDataSize)) {
           printf("jenndebug RowAccessHandle.new_row() failed\n");
           reply->set_is_committed(false);
           return Status::OK;
