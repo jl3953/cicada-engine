@@ -88,7 +88,38 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
           return Status::OK;
       }
 
-      // TODO jenndebug what about duplicate rows? Do they still need new_row()?
+      // insert old rows, store new rows
+      std::vector<smdbrpc::KVPair> new_rows;
+      for (int i = 0; i < request->write_keyset_size(); i++) {
+
+          uint64_t key = request->write_keyset(i).key();
+          uint64_t value = request->write_keyset(i).value();
+
+          uint64_t looked_value = 0;
+          if (1 != hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
+                                    [&looked_value](auto &k, auto &v) {
+                                        (void)k;
+                                        looked_value = v;
+                                        return false;
+          })) {
+              // new rows exist
+              new_rows.push_back(request->write_keyset(i));
+          } else {
+
+              // do an overwrite for old rows
+              if (1 != hash_idx->insert(&tx, key, value)) {
+                  printf("jenndebug existing row insert(%lu, %lu) failed\n",
+                         key, value);
+                  reply->set_is_committed(false);
+                  return Status::OK;
+              } else {
+                  printf("jenndebug existing row insert(%lu, %lu) succeeded\n",
+                         key, value);
+              }
+          }
+      }
+
+      // insertion of new rows
       if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
                        kDataSize)) {
           printf("jenndebug RowAccessHandle.new_row() failed\n");
@@ -96,24 +127,27 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
           return Status::OK;
       }
 
-      for (int i = 0; i < request->write_keyset_size(); i++) {
+      for (int i = 0; i < int(new_rows.size()); i++) {
 
-          uint64_t key = request->write_keyset(i).key();
-          uint64_t value = request->write_keyset(i).value();
+          uint64_t key = new_rows[i].key();
+          uint64_t value = new_rows[i].value();
 
           auto ret = hash_idx->insert(&tx, key, value);
           if (ret != 1) {
-              printf("jenndebug hash_index->insert(%lu, %lu) failed\n", key, value);
+              printf("jenndebug new row insert(%lu, %lu) failed\n", key, value);
               reply->set_is_committed(false);
               return Status::OK;
           } else {
-              printf("jenndebug hash_index->insert(%lu, %lu) succeeded\n", key, value);
+              printf("jenndebug new row insert(%lu, %lu) succeeded\n", key, value);
           }
       }
 
+      // existing reads and populating response
       for (int i = 0; i < request->read_keyset_size(); i++) {
-          uint64_t looked_value = 0;
+
           uint64_t key = request->read_keyset(i);
+
+          uint64_t looked_value = 0;
           auto lookup_result =
                   hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
                                    [&looked_value](auto& k, auto& v) {
@@ -133,34 +167,12 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
           }
       }
 
+      // commit transaction
       Result result;
       tx.commit(&result);
 
       reply->set_is_committed(true);
       return Status::OK;
-
-      // check
-//      tx.begin();
-//      uint64_t looked_value = 0;
-//      auto lookup_result =
-//              hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
-//                               [&looked_value](auto& k, auto& v) {
-//                                   (void)k;
-//                                   looked_value = v;
-//                                   return false;
-//                               });
-//      tx.commit();
-//      if (value == looked_value) {
-//          printf("jenndebug ok we did it, value %lu, looked_value %lu\n", value, looked_value);
-//      } else {
-//          printf("jenndebug oh we screwed up, value %lu, looked_value %lu\n", value, looked_value);
-//      }
-//
-//    reply->set_is_committed(Result::kCommitted == result);
-//      reply->set_is_committed(true);
-//    HLCTimestamp *hlcTimestamp = new HLCTimestamp(request->hlctimestamp());
-//    reply->set_allocated_hlctimestamp(hlcTimestamp);
-//    return Status::OK;
   }
 };
 
