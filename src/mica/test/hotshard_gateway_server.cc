@@ -122,16 +122,14 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
                                 });
 
           if (lookup_result != 1) {
-              printf("jenndebug lookup(%lu) failed\n", key);
-              reply->set_is_committed(false);
-              return Status::OK;
+              printf("jenndebug lookup(%lu) no value\n", key);
           } else {
               printf("jenndebug lookup(%lu) = %lu\n", key, looked_value);
-          }
 
-          smdbrpc::KVPair* kvPair = reply->add_read_valueset();
-          kvPair->set_key(key);
-          kvPair->set_value(looked_value);
+              smdbrpc::KVPair *kvPair = reply->add_read_valueset();
+              kvPair->set_key(key);
+              kvPair->set_value(looked_value);
+          }
       }
 
       Result result;
