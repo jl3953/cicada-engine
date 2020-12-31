@@ -87,15 +87,15 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
           return Status::OK;
       }
 
-      for (int i = 0; i < request->write_keyset_size(); i++) {
+      // TODO jenndebug what about duplicate rows? Do they still need new_row()?
+      if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
+                       kDataSize)) {
+          printf("jenndebug RowAccessHandle.new_row() failed\n");
+          reply->set_is_committed(false);
+          return Status::OK;
+      }
 
-          // TODO jenndebug what about duplicate rows? Do they still need new_row()?
-          if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
-                           kDataSize)) {
-              printf("jenndebug RowAccessHandle.new_row() failed\n");
-              reply->set_is_committed(false);
-              return Status::OK;
-          }
+      for (int i = 0; i < request->write_keyset_size(); i++) {
 
           uint64_t key = request->write_keyset(i).key();
           uint64_t value = request->write_keyset(i).value();
