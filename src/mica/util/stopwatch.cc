@@ -27,12 +27,13 @@ void Stopwatch::init_end() {
 
 
     if (diff >= min_time) {
-      uint64_t t = now();
+      // uint64_t t = now();
 //      c_1_sec_ = (t - init_t_) * min_time * 10 / diff;
 //      c_1_msec_ = c_1_sec_ / 1000;
 //      c_1_usec_ = c_1_msec_ / 1000;
 //      c_1_nsec_ = c_1_usec_ / 1000;
 
+      printf("jenndebug something\n");
       // jennversion
       c_1_nsec_ = 1;
       c_1_usec_ = c_1_nsec_ * 1000;
