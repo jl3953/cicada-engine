@@ -368,7 +368,7 @@ int main(int argc, char** argv) {
                                                  [&value](auto& k, auto& v) {
                                                      (void)k;
                                                      value = v;
-                                                     return false;
+                                                     return true;
                                                  });
                         printf("jenndebug found %lu, (%lu, %lu)\n", lookup_result, key, value);
                     }
