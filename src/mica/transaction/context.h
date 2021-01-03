@@ -137,16 +137,36 @@ class Context {
     // read latency, as if in the network I/O?
   }
 
+  /**
+   * Increments the Context's clock_ by the cycles that have passed.
+   *
+   * jennquestion: why not just set it to the current rdtsc()?
+   */
   void update_clock() {
+
+      // jenncomment obtain current timestamp counter
     uint64_t tsc = ::mica::util::rdtsc();
 
+    // jenncomment find difference b/w current rdtsc and last time rdtsc was taken
+    // was it in set_clock() or Context initialization?
     int64_t tsc_diff = static_cast<int64_t>(tsc - last_tsc_);
-    if (tsc_diff <= 0)
-      tsc_diff = 1;
-    else if (tsc_diff > StaticConfig::kMaxClockIncrement)
-      tsc_diff = StaticConfig::kMaxClockIncrement;
 
+    if (tsc_diff <= 0) {
+        // jenncomment if the difference is negative, set the difference to 1
+        // jennquestion why would it be negative? Which entities are allowed to
+        // modify last_tsc, such that the current rdtsc() is less than it?
+        tsc_diff = 1;
+    } else if (tsc_diff > StaticConfig::kMaxClockIncrement) {
+        // jenncomment if the difference is over some configured threshold,
+        // set the difference to that configured threshold
+        tsc_diff = StaticConfig::kMaxClockIncrement;
+    }
+
+    // jenncomment increment the clock_, which belongs to the Context class, by
+    // that difference
     clock_ += static_cast<uint64_t>(tsc_diff);
+
+    // jenncomment last_tsc_ to whatever the tsc_ is now.
     last_tsc_ = tsc;
   }
 
