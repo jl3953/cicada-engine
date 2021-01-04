@@ -176,8 +176,8 @@ class Context {
     int size = backtrace(array, 100);
     backtrace_symbols_fd(array, size, STDERR_FILENO);
     printf("jenndebug generate_timestamp() read\n");
-    rts_.write(rts);
     throw "jenndebug allright";
+    rts_.write(rts);
 
     if (for_peek_only_transaction)
       return rts;
