@@ -430,16 +430,20 @@ int main(int argc, const char* argv[]) {
   printf("\n");
 
   Logger logger;
+  printf("jenndebug -3\n");
   DB db(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
 
+  printf("jenndebug -2\n");
   const bool kVerify =
       typeid(typename DBConfig::Logger) == typeid(VerificationLogger<DBConfig>);
 
   const uint64_t data_sizes[] = {kDataSize};
+  printf("jenndebug -1\n");
   bool ret = db.create_table("main", 1, data_sizes);
   assert(ret);
   (void)ret;
 
+  printf("jenndebug 0\n");
   auto tbl = db.get_table("main");
   printf("jenndebug 1\n");
 
