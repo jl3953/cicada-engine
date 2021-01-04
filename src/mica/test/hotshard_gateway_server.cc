@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
     double read_ratio = /*atof(argv[3]);*/ 95;
     double zipf_theta = /*atof(argv[4]);*/ 0.5;
     uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 1;
-    uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
+    uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 1;
 
     Alloc alloc(config.get("alloc"));
     auto page_pool_size = 24 * uint64_t(1073741824);
