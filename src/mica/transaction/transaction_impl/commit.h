@@ -9,7 +9,8 @@ namespace mica {
 namespace transaction {
 template <class StaticConfig>
 bool Transaction<StaticConfig>::begin(bool peek_only,
-                                      const Timestamp* causally_after_ts) {
+                                      const Timestamp* causally_after_ts,
+                                      const Timestamp* assigned_ts) {
   Timing t(ctx_->timing_stack(), &Stats::timestamping);
 
   if (!ctx_->db_->is_active(ctx_->thread_id_)) return false;
@@ -25,7 +26,7 @@ bool Transaction<StaticConfig>::begin(bool peek_only,
   else
     began_ = true;
 
-  begin_time_ = ctx_->db_->sw()->now();
+  begin_time_ = ctx_->db_->sw()->now(); // jenndebug marktime
 
   peek_only_ = peek_only;
 
@@ -35,11 +36,16 @@ bool Transaction<StaticConfig>::begin(bool peek_only,
   }
 
   while (true) {
-    ts_ = ctx_->generate_timestamp(peek_only);
+
+    if (assigned_ts != nullptr) {
+      ts_ = *assigned_ts;
+    } else {
+      ts_ = ctx_->generate_timestamp(peek_only); // jenndebug marktime
+    }
 
     // TODO: We should bump the clock instead of waiting for a high timestamp.
     if (causally_after_ts != nullptr) {
-      if (ts_ <= *causally_after_ts) {
+      if (ts_ <= *causally_after_ts) { // jenndebug marktime
         ::mica::util::pause();
         continue;
       }
