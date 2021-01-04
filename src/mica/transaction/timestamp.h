@@ -3,6 +3,7 @@
 #define MICA_TRANSACTION_TIMESTAMP_H_
 
 #include <cassert>
+#include <cstdio>
 #include "mica/common.h"
 #include "mica/util/barrier.h"
 
@@ -183,6 +184,7 @@ struct WideConcurrentTimestamp {
 
   void write(const WideTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a may be being read by others.
+    printf("jenndebug version %ld\n", version);
     assert((version & 1) == 0);
     version++;
     ::mica::util::memory_barrier();
