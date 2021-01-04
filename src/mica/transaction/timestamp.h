@@ -66,6 +66,7 @@ struct CompactConcurrentTimestamp {
   void init(const CompactTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a is not being read by others.
     t2 = b.t2;
+    printf("jenndebug compact init\n");
   }
 
   void write(const CompactTimestamp& b) {
@@ -177,6 +178,7 @@ struct WideConcurrentTimestamp {
 
   void init(const WideTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a is not being read by others.
+    printf("jenndebug widetimestamp init\n");
     t1 = b.t1;
     t2 = b.t2;
     version = 0;
@@ -289,6 +291,7 @@ struct CentralizedConcurrentTimestamp {
 
   void init(const CentralizedTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a is not being read by others.
+    printf("jenndebug centralizedtimestamp init\n");
     t2 = b.t2;
   }
 
