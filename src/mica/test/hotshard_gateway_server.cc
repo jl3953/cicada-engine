@@ -81,7 +81,9 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
       Transaction tx(db_ptr->context(0));
 
       RowAccessHandle rah(&tx);
-      bool ret_jenn = tx.begin();
+      Timestamp assigned_ts = Timestamp::make(
+          0, static_cast<uint64_t>(request->hlctimestamp().walltime()), 0);
+      bool ret_jenn = tx.begin(false, nullptr, &assigned_ts);
       if (!ret_jenn) {
           printf("jenndebug tx.begin() failed.\n");
           reply->set_is_committed(false);
@@ -170,6 +172,8 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
       // commit transaction
       Result result;
       tx.commit(&result);
+
+      printf("jenndebug ===============================\n");
 
       reply->set_is_committed(true);
       return Status::OK;
