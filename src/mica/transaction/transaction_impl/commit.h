@@ -35,6 +35,7 @@ bool Transaction<StaticConfig>::begin(bool peek_only,
   }
 
   while (true) {
+    printf("jenndebug generate_timestamp 5\n");
     ts_ = ctx_->generate_timestamp(peek_only);
 
     // TODO: We should bump the clock instead of waiting for a high timestamp.

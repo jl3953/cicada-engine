@@ -51,6 +51,7 @@ DB<StaticConfig>::DB(PagePool<StaticConfig>** page_pools, Logger* logger,
   active_thread_count_ = 0;
   leader_thread_id_ = static_cast<uint16_t>(-1);
 
+  printf("jenndebug generate_timestamp() 1\n");
   min_wts_.init(ctxs_[0]->generate_timestamp());
   min_rts_.init(min_wts_.get());
   ref_clock_ = 0;
@@ -149,6 +150,7 @@ void DB<StaticConfig>::activate(uint16_t thread_id) {
     ctxs_[thread_id]->set_clock(ref_clock_ + 1);
     clock_init_[thread_id] = true;
   }
+  printf("jenndebug generate_timestamp() 2\n");
   ctxs_[thread_id]->generate_timestamp();
 
   // Ensure that no bogus clock/rts is accessed by other threads.
@@ -173,6 +175,7 @@ void DB<StaticConfig>::activate(uint16_t thread_id) {
     // We also perform clock syncronization to bump up this thread's clock if
     // necessary.
     ctxs_[thread_id]->synchronize_clock();
+    printf("jenndebug generate_timestamp 3\n");
     ctxs_[thread_id]->generate_timestamp();
   }
 
@@ -213,6 +216,7 @@ void DB<StaticConfig>::idle(uint16_t thread_id) {
   quiescence(thread_id);
 
   ctxs_[thread_id]->synchronize_clock();
+  printf("jenndebug generate_timestamp 4\n");
   ctxs_[thread_id]->generate_timestamp();
 }
 
