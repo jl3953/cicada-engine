@@ -441,14 +441,18 @@ int main(int argc, const char* argv[]) {
   (void)ret;
 
   auto tbl = db.get_table("main");
+  printf("jenndebug 1\n");
 
   db.activate(0);
+  printf("jenndebug 2\n");
 
   HashIndex* hash_idx = nullptr;
   if (kUseHashIndex) {
+    printf("jenndebug 3\n");
     bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
     assert(ret);
     (void)ret;
+    printf("jenndebug 4\n");
 
     hash_idx = db.get_hash_index_unique_u64("main_idx");
     printf("jenndebug it here?\n");
