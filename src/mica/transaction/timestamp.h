@@ -180,6 +180,7 @@ struct WideConcurrentTimestamp {
     t1 = b.t1;
     t2 = b.t2;
     version = 0;
+    printf("jenndebug version init %ld\n", version);
   }
 
   void write(const WideTimestamp& b) {
@@ -187,6 +188,7 @@ struct WideConcurrentTimestamp {
     printf("jenndebug version %ld\n", version);
     assert((version & 1) == 0); // jenncomment ensure version is even
     version++;
+    printf("jenndebug version change %ld\n", version);
     ::mica::util::memory_barrier();
 
     t1 = b.t1;
@@ -194,6 +196,7 @@ struct WideConcurrentTimestamp {
 
     ::mica::util::memory_barrier();
     version++;
+    printf("jenndebug version change %ld\n", version);
   }
 
   void update(const WideTimestamp& b) {
@@ -204,8 +207,10 @@ struct WideConcurrentTimestamp {
         cts_version &= ~uint64_t(1);
         uint64_t cts_new_version = cts_version + 1;
 
+        printf("jenndebug maybe version change? %ld\n", version);
         uint64_t actual_cts_version =
             __sync_val_compare_and_swap(&version, cts_version, cts_new_version);
+        printf("jenndebug did version change? %ld\n", version);
         if (actual_cts_version == cts_version) break;
 
         ::mica::util::pause();
@@ -220,6 +225,7 @@ struct WideConcurrentTimestamp {
 
       ::mica::util::memory_barrier();
       version++;
+      printf("jenndebug version change %ld\n", version);
     }
   }
 };
