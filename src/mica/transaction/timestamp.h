@@ -185,7 +185,7 @@ struct WideConcurrentTimestamp {
   void write(const WideTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a may be being read by others.
     printf("jenndebug version %ld\n", version);
-    assert((version & 1) == 0);
+    assert((version & 1) == 0); // jenncomment ensure version is even
     version++;
     ::mica::util::memory_barrier();
 

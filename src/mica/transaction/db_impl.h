@@ -276,9 +276,13 @@ void DB<StaticConfig>::quiescence(uint16_t thread_id) {
     // not strict).
     if (min_wts < min_rts) min_wts = min_rts;
 
-    if (min_wts_.get() < min_wts) min_wts_.write(min_wts);
+    if (min_wts_.get() < min_wts) {
+      printf("jenndebug quiescence() write\n");
+      min_wts_.write(min_wts);
+    }
 
     if (min_rts_.get() <= min_rts) {
+      printf("jenndebug quiescence() read\n");
       min_rts_.write(min_rts);
 
       ref_clock_ = ctxs_[thread_id]->clock();

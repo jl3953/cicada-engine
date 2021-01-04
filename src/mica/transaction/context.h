@@ -162,6 +162,7 @@ class Context {
     const uint16_t era = 0;
 
     auto wts = Timestamp::make(era, adjusted_clock, thread_id_);
+    printf("jenndebug generate_timestamp() write\n");
     wts_.write(wts);
 
     Timestamp rts = db_->min_wts();
@@ -169,6 +170,7 @@ class Context {
     // subtracting 1 because (1) every thread does it and (2) timestamp
     // collisions are benign for read-only transactions.
     rts.t2--;
+    printf("jenndebug generate_timestamp() read\n");
     rts_.write(rts);
 
     if (for_peek_only_transaction)
