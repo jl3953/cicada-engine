@@ -2,6 +2,7 @@
 #ifndef MICA_UTIL_STOPWATCH_CC_
 #define MICA_UTIL_STOPWATCH_CC_
 
+#include <cstdio>
 #include "mica/util/stopwatch.h"
 #include "mica/util/barrier.h"
 
@@ -24,12 +25,23 @@ void Stopwatch::init_end() {
         static_cast<uint64_t>(tv.tv_sec - init_tv_.tv_sec) * 1000000UL +
         static_cast<uint64_t>(tv.tv_usec - init_tv_.tv_usec);
 
+
     if (diff >= min_time) {
-      uint64_t t = now();
-      c_1_sec_ = (t - init_t_) * min_time * 10 / diff;
-      c_1_msec_ = c_1_sec_ / 1000;
-      c_1_usec_ = c_1_msec_ / 1000;
-      c_1_nsec_ = c_1_usec_ / 1000;
+      // uint64_t t = now();
+//      c_1_sec_ = (t - init_t_) * min_time * 10 / diff;
+//      c_1_msec_ = c_1_sec_ / 1000;
+//      c_1_usec_ = c_1_msec_ / 1000;
+//      c_1_nsec_ = c_1_usec_ / 1000;
+
+      printf("jenndebug something\n");
+      // jennversion
+      c_1_nsec_ = 1;
+      c_1_usec_ = c_1_nsec_ * 1000;
+      c_1_msec_ = c_1_usec_ * 1000;
+      c_1_sec_ = c_1_msec_ * 1000;
+      // jennversion end
+
+
       break;
     }
 

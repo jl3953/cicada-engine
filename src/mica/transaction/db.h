@@ -55,7 +55,8 @@ struct BasicDBConfig {
   static constexpr bool kPromoteNonInlinedVersion = true;
 
   // The maximum single increment of a clock (cycles).
-  static constexpr int64_t kMaxClockIncrement = 10000000000000UL;  // ~1 hour
+  // static constexpr int64_t kMaxClockIncrement = 10000000000000UL;  // ~1 hour
+  static constexpr int64_t kMaxClockIncrement = 3600000000000; // ~1 hour // jennversion
 
   // Backoff when the transaction has been aborted.  Requires
   // kCollectCommitStats == true.
@@ -114,7 +115,8 @@ struct BasicDBConfig {
   // The cycle increment for tsc offset when a transaction aborts (cycles). This
   // is now just a fixed increment for a thread that had an abort.  There is no
   // increment.
-  static constexpr int64_t kStragglerAvoidanceIncrement = 2600;  // 1 us
+  // static constexpr int64_t kStragglerAvoidanceIncrement = 2600;  // 1 us
+  static constexpr int64_t kStragglerAvoidanceIncrement = 1000; // 1 us // jennversion
 
   // The minimum interval to quiescence to increment the GC epoch (us).
   static constexpr int64_t kMinQuiescenceInterval = 10;
