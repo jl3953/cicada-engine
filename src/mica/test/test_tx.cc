@@ -451,7 +451,9 @@ int main(int argc, const char* argv[]) {
     (void)ret;
 
     hash_idx = db.get_hash_index_unique_u64("main_idx");
+    printf("jenndebug it here?\n");
     Transaction tx(db.context(0));
+    printf("jenndebug or it here?\n");
     hash_idx->init(&tx);
   }
 
