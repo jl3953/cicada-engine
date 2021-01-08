@@ -205,11 +205,11 @@ int main(int argc, char** argv) {
     auto config = ::mica::util::Config::load_file("test_tx.json");
 
     uint64_t num_rows = /* static_cast<uint64_t>(atol(argv[1]));*/ 100;
-    uint64_t reqs_per_tx = /*static_cast<uint64_t>(atol(argv[2]));*/ 1;
-    double read_ratio = /*atof(argv[3]);*/ 95;
-    double zipf_theta = /*atof(argv[4]);*/ 0.5;
-    uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 1;
-    uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 1;
+    uint64_t reqs_per_tx = /*static_cast<uint64_t>(atol(argv[2]));*/ 2;
+    double read_ratio = /*atof(argv[3]);*/ 0.5;
+    double zipf_theta = /*atof(argv[4]);*/ 0.9;
+    uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 100;
+    uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
 
     Alloc alloc(config.get("alloc"));
     auto page_pool_size = 24 * uint64_t(1073741824);
