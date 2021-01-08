@@ -382,18 +382,12 @@ int main(int argc, const char* argv[]) {
 
   auto config = ::mica::util::Config::load_file("test_tx.json");
 
-  // uint64_t num_rows = static_cast<uint64_t>(atol(argv[1]));
-  uint64_t num_rows = 100; // jennversion
-  // uint64_t reqs_per_tx = static_cast<uint64_t>(atol(argv[2]));
-  uint64_t reqs_per_tx = 2; // jennversion
-  // double read_ratio = atof(argv[3]);
-  double read_ratio = 0.5; // jennversion
-  // double zipf_theta = atof(argv[4]);
-  double zipf_theta = 0.7; // jennversion
-  // uint64_t tx_count = static_cast<uint64_t>(atol(argv[5]));
-  double tx_count = 100; // jennversion
-  // uint64_t num_threads = static_cast<uint64_t>(atol(argv[6]));
-  double num_threads = 2; // jennversion
+  uint64_t num_rows = static_cast<uint64_t>(atol(argv[1]));
+  uint64_t reqs_per_tx = static_cast<uint64_t>(atol(argv[2]));
+  double read_ratio = atof(argv[3]);
+  double zipf_theta = atof(argv[4]);
+  uint64_t tx_count = static_cast<uint64_t>(atol(argv[5]));
+  uint64_t num_threads = static_cast<uint64_t>(atol(argv[6]));
 
   Alloc alloc(config.get("alloc"));
   auto page_pool_size = 24 * uint64_t(1073741824);
