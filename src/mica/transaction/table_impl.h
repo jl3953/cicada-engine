@@ -359,6 +359,7 @@ bool Table<StaticConfig>::renew_rows(Context<StaticConfig>* ctx, uint16_t cf_id,
       while (true) {
         if (!tx.begin()) return false;
 
+
         // if (head(cf_id, row_id_begin)->inlined_rv->status ==
         //     RowVersionStatus::kInvalid)
         //   printf("unused inlined_rv\n");
@@ -366,11 +367,11 @@ bool Table<StaticConfig>::renew_rows(Context<StaticConfig>* ctx, uint16_t cf_id,
         RowAccessHandle<StaticConfig> rah(&tx);
         if (!rah.peek_row(this, cf_id, row_id_begin, false, true, true) ||
             !rah.read_row() || !rah.write_row()) {
-          // tx.abort();
+          tx.abort();
           // printf("row_id=%" PRIu64 "\n", row_id_begin);
           // printf("status=%d\n", static_cast<int>(rv->status));
           // printf("inlined_rv status=%d\n",
-          //        static_cast<int>(head(row_id_begin)->inlined_rv->status));
+          //        static_cast<int>(head(cf_id, row_id_begin)->inlined_rv->status));
           // printf("\n");
           continue;
         }

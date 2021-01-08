@@ -33,7 +33,6 @@ void Stopwatch::init_end() {
 //      c_1_usec_ = c_1_msec_ / 1000;
 //      c_1_nsec_ = c_1_usec_ / 1000;
 
-      printf("jenndebug something\n");
       // jennversion
       c_1_nsec_ = 1;
       c_1_usec_ = c_1_nsec_ * 1000;
