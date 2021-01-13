@@ -27,7 +27,7 @@
 #define MICA_COLUMN_COUNT 1
 
 #define INDEX_STRUCT IDX_MICA
-#define MICA_FULLINDEX false
+#define MICA_FULLINDEX true
 
 #define MICA_USE_SCAN false
 #define MICA_USE_FULL_TABLE_SCAN false
@@ -143,7 +143,7 @@ static constexpr bool kUseBTreeIndex = false;
 #if MICA_FULLINDEX
 static constexpr bool kSkipValidationForIndexAccess = false;
 #else
-static constexpr bool kSkipValidationForIndexAccess = false;
+static constexpr bool kSkipValidationForIndexAccess = true;
 #endif
 
 // static constexpr bool kUseSnapshot = false;

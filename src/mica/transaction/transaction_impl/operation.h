@@ -289,9 +289,6 @@ bool Transaction<StaticConfig>::peek_row(RAH& rah, Table<StaticConfig>* tbl,
   }
 #pragma GCC diagnostic pop
 
-  printf("jenndebug YOOOOOOOOOOOOOOOOOOOOOOOOOOOO\n");
-//  rset_idx_[rset_size_++] = access_size_;
-//  rah.access_item_ = &accesses_[access_size_];
   accesses_[access_size_] = {access_size_, /* i */
                              0, /* inserted */
                              RowAccessState::kPeek, /* state */
@@ -312,7 +309,6 @@ template <class StaticConfig>
 bool Transaction<StaticConfig>::peek_row(RAHPO& rah, Table<StaticConfig>* tbl,
                                          uint16_t cf_id, uint64_t row_id,
                                          bool check_dup_access) {
-  printf("jenndebug PEEK_ROW EEEEEEEEEEEEEEEEEEEEEEE\n");
   assert(began_);
   if (rah) return false;
 
@@ -377,7 +373,6 @@ template <class DataCopier>
 bool Transaction<StaticConfig>::read_row(RAH& rah,
                                          const DataCopier& data_copier) {
 
-  printf("jenndebug read_row() HEEEELLOOOOO\n");
   assert(began_);
   if (!rah) return false;
 
@@ -589,9 +584,6 @@ void Transaction<StaticConfig>::locate(RowCommon<StaticConfig>*& newer_rv,
   if (ForWrite) {
     // Someone have read this row, preventing this row from being overwritten.
     // Thus, abort this transaction.
-    printf("jenndebug ====== rv->rts.get() %" PRIu64 ", ts_ %" PRIu64
-               ", rv->data.get() %" PRIu64 "\n",
-           rv->rts.get(), ts_, rv->data);
     if (rv != nullptr && rv->rts.get() > ts_) rv = nullptr;
   }
 

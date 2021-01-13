@@ -390,7 +390,6 @@ int main(int argc, char** argv) {
                 return 0;
             });
         }
-        printf("jenndebug 3\n");
 
         while (threads.size() > 0) {
             threads.back().join();
@@ -415,7 +414,6 @@ int main(int argc, char** argv) {
         db.reset_stats();
         db.reset_backoff();
 
-        printf("jenndebug 4\n");
     }
 
   RunServer();
