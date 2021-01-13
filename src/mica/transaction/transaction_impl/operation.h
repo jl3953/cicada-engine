@@ -289,16 +289,20 @@ bool Transaction<StaticConfig>::peek_row(RAH& rah, Table<StaticConfig>* tbl,
   }
 #pragma GCC diagnostic pop
 
-  accesses_[access_size_] = {access_size_,
-                             0,
-                             RowAccessState::kPeek,
-                             tbl,
-                             cf_id,
-                             row_id,
-                             head,
-                             newer_rv,
-                             nullptr,
-                             rv /*, latest_wts */};
+  printf("jenndebug YOOOOOOOOOOOOOOOOOOOOOOOOOOOO\n");
+//  rset_idx_[rset_size_++] = access_size_;
+//  rah.access_item_ = &accesses_[access_size_];
+  accesses_[access_size_] = {access_size_, /* i */
+                             0, /* inserted */
+                             RowAccessState::kPeek, /* state */
+                             tbl, /* tbl */
+                             cf_id, /* cf_id */
+                             row_id, /* row_id */
+                             head,  /* head */
+                             newer_rv, /* newer_rv */
+                             nullptr, /* write_rv */
+                             rv /* read_rv */
+                             /*, latest_wts */};
   access_size_++;
 
   return true;
@@ -308,6 +312,7 @@ template <class StaticConfig>
 bool Transaction<StaticConfig>::peek_row(RAHPO& rah, Table<StaticConfig>* tbl,
                                          uint16_t cf_id, uint64_t row_id,
                                          bool check_dup_access) {
+  printf("jenndebug PEEK_ROW EEEEEEEEEEEEEEEEEEEEEEE\n");
   assert(began_);
   if (rah) return false;
 
@@ -371,6 +376,8 @@ template <class StaticConfig>
 template <class DataCopier>
 bool Transaction<StaticConfig>::read_row(RAH& rah,
                                          const DataCopier& data_copier) {
+
+  printf("jenndebug read_row() HEEEELLOOOOO\n");
   assert(began_);
   if (!rah) return false;
 
@@ -557,10 +564,10 @@ void Transaction<StaticConfig>::locate(RowCommon<StaticConfig>*& newer_rv,
 
     if (StaticConfig::kInsertNewestVersionOnly && ForRead && ForWrite &&
         rv->status != RowVersionStatus::kAborted && rv->wts != ts_) {
-      // printf("ts=%" PRIu64 " min_rts %" PRIu64 "\n", ts_.t2,
-      //        ctx_->db_->min_rts().t2);
-      // printf("rv=%p wts=%" PRIu64 " status=%d\n", rv, rv->wts.t2,
-      //        static_cast<int>(rv->status));
+       printf("ts=%" PRIu64 " min_rts %" PRIu64 "\n", ts_.t2,
+              ctx_->db_->min_rts().t2);
+       printf("rv=%p wts=%" PRIu64 " status=%d\n", rv, rv->wts.t2,
+              static_cast<int>(rv->status));
       rv = nullptr;
       break;
     }
@@ -582,6 +589,9 @@ void Transaction<StaticConfig>::locate(RowCommon<StaticConfig>*& newer_rv,
   if (ForWrite) {
     // Someone have read this row, preventing this row from being overwritten.
     // Thus, abort this transaction.
+    printf("jenndebug ====== rv->rts.get() %" PRIu64 ", ts_ %" PRIu64
+               ", rv->data.get() %" PRIu64 "\n",
+           rv->rts.get(), ts_, rv->data);
     if (rv != nullptr && rv->rts.get() > ts_) rv = nullptr;
   }
 

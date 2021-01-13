@@ -143,7 +143,7 @@ static constexpr bool kUseBTreeIndex = false;
 #if MICA_FULLINDEX
 static constexpr bool kSkipValidationForIndexAccess = false;
 #else
-static constexpr bool kSkipValidationForIndexAccess = true;
+static constexpr bool kSkipValidationForIndexAccess = false;
 #endif
 
 // static constexpr bool kUseSnapshot = false;

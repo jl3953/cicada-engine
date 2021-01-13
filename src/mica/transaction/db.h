@@ -21,7 +21,7 @@ struct BasicDBConfig {
   // Perform pre-validation before making any write on the shared memory.
   // Faster when enabled.
   static constexpr bool kPreValidation = true;
-  // Allow insering a new write version just after the row head, even if the
+  // Allow inserting a new write version just after the row head, even if the
   // existing newest (and newer than this version) version has been aborted.
   // Faster when enabled.  Write-only verions are not affected by this.
   static constexpr bool kInsertNewestVersionOnly = true;

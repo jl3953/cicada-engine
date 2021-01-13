@@ -182,11 +182,14 @@ bool Transaction<StaticConfig>::check_version() {
 
 template <class StaticConfig>
 void Transaction<StaticConfig>::update_rts() {
+  printf("jenndebug made it to update_rts()\n");
   for (auto j = 0; j < rset_size_; j++) {
     auto i = rset_idx_[j];
     auto item = &accesses_[i];
 
     item->read_rv->rts.update(ts_);
+    printf("jenndebug update_rts() item->read_rv->rts %" PRIu64 "\n",
+           item->read_rv->rts.get());
   }
 }
 
@@ -327,6 +330,7 @@ bool Transaction<StaticConfig>::commit(Result* detail,
   {
     t.switch_to(&Stats::rts_update);
     if (StaticConfig::kVerbose) printf("rts_update: ts=%" PRIu64 "\n", ts_.t2);
+    printf("jenndebug please update the damn rts\n");
     update_rts();
   }
 
