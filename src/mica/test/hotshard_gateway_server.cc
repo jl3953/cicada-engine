@@ -171,11 +171,15 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
 
       // commit transaction
       Result result;
-      tx.commit(&result);
+      if (!tx.commit(&result)) {
+        reply->set_is_committed(false);
+        printf("jenndebug commit failed\n");
+      } else {
+        reply->set_is_committed(true);
+        printf("jenndebug commit succeeded\n");
+      }
 
       printf("jenndebug ===============================\n");
-
-      reply->set_is_committed(true);
       return Status::OK;
   }
 };
