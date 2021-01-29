@@ -52,8 +52,8 @@ typedef DBConfig::Timing Timing;
 typedef ::mica::transaction::PagePool<DBConfig> PagePool;
 typedef ::mica::transaction::DB<DBConfig> DB;
 typedef ::mica::transaction::Table<DBConfig> Table;
-// typedef DB::HashIndexUniqueU64 HashIndex;
-typedef DB::HashIndexNonuniqueU64 HashIndex;
+typedef DB::HashIndexUniqueU64 HashIndex;
+//typedef DB::HashIndexNonuniqueU64 HashIndex;
 typedef DB::BTreeIndexUniqueU64 BTreeIndex;
 typedef ::mica::transaction::RowVersion<DBConfig> RowVersion;
 typedef ::mica::transaction::RowAccessHandle<DBConfig> RowAccessHandle;
@@ -80,106 +80,105 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
       db_ptr->activate(static_cast<uint16_t>(0));
       Transaction tx(db_ptr->context(0));
 
-      RowAccessHandle rah(&tx);
+      //RowAccessHandle rah(&tx);
       Timestamp assigned_ts = Timestamp::make(
           0, static_cast<uint64_t>(request->hlctimestamp().walltime()), 0);
-      bool ret_jenn = tx.begin(false, nullptr, &assigned_ts);
-      if (!ret_jenn) {
+      // bool began_successfully = tx.begin(false, nullptr, &assigned_ts);
+      if (!tx.begin(false, nullptr, &assigned_ts)) {
           printf("jenndebug tx.begin() failed.\n");
           reply->set_is_committed(false);
-          return Status::OK;
+          return Status::CANCELLED;
       }
 
-      // insert old rows, store new rows
-      std::vector<smdbrpc::KVPair> new_rows;
+      // reads
+      for (uint64_t key : request->read_keyset()) {
+
+        auto row_id = static_cast<uint64_t>(-1);
+        if (hash_idx->lookup(&tx, key, true /*skip_validation*/,
+                             [&row_id](auto &k, auto& v){
+                               (void) k;
+                               row_id = v;
+                               return true; /* jenndebug is this correct? */
+                             }) > 0) {
+          // value being read is found
+          RowAccessHandle rah(&tx);
+          if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
+              !rah.read_row()) {
+            // failed to read value for whatever reason
+            tx.abort();
+            reply->set_is_committed(false);
+            printf("jenndebug reads failed to peek/read row()\n");
+            return Status::CANCELLED;
+          }
+          smdbrpc::KVPair *kvPair = reply->add_read_valueset();
+          kvPair->set_key(key);
+          uint64_t val;
+          memcpy(&val, &rah.cdata()[0], sizeof(val));
+          printf("jenndebug val %lu, rah.cdata() %lu\n", val, rah.cdata()[0]);
+          //auto val = static_cast<uint64_t>(rah.cdata()[0]);
+          kvPair->set_value(val);
+        }
+      }
+
+      // writes
       for (int i = 0; i < request->write_keyset_size(); i++) {
+        uint64_t key = request->write_keyset(i).key();
+        uint64_t val = request->write_keyset(i).value();
 
-          uint64_t key = request->write_keyset(i).key();
-          uint64_t value = request->write_keyset(i).value();
-
-          uint64_t looked_value = 0;
-          if (1 != hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
-                                    [&looked_value](auto &k, auto &v) {
-                                        (void)k;
-                                        looked_value = v;
-                                        return false;
-          })) {
-              // new rows exist
-              new_rows.push_back(request->write_keyset(i));
-          } else {
-
-              // do an overwrite for old rows
-              if (1 != hash_idx->insert(&tx, key, value)) {
-                  printf("jenndebug existing row insert(%lu, %lu) failed\n",
-                         key, value);
-                  reply->set_is_committed(false);
-                  return Status::OK;
-              } else {
-                  printf("jenndebug existing row insert(%lu, %lu) succeeded\n",
-                         key, value);
-              }
+        RowAccessHandle rah(&tx);
+        auto row_id = static_cast<uint64_t>(-1);
+        if (hash_idx->lookup(&tx, key, true,
+                             [&row_id](auto &k, auto& v){
+                               (void) k;
+                               row_id = v;
+                               return true;
+                             }) > 0) {
+          // value already exists, just update it
+          if (!rah.peek_row(tbl, 0, row_id, true, true, true) ||
+              !rah.write_row()) {
+            // failed to write
+            tx.abort();
+            reply->set_is_committed(false);
+            printf("jenndebug failed to peek/write rows\n");
+            return Status::CANCELLED;
           }
-      }
+          memcpy(&rah.data()[0], &val, sizeof(val));
+        } else {
+          // value does not exist yet. Create row and insert into index.
 
-      // insertion of new rows
-      if (!new_rows.empty() && !rah.new_row(tbl, 0, Transaction::kNewRowID,
-                                            true, kDataSize)) {
-          printf("jenndebug RowAccessHandle.new_row() failed\n");
-          reply->set_is_committed(false);
-          return Status::OK;
-      }
-
-      for (int i = 0; i < int(new_rows.size()); i++) {
-
-          uint64_t key = new_rows[i].key();
-          uint64_t value = new_rows[i].value();
-
-          auto ret = hash_idx->insert(&tx, key, value);
-          if (ret != 1) {
-              printf("jenndebug new row insert(%lu, %lu) failed\n", key, value);
-              reply->set_is_committed(false);
-              return Status::OK;
-          } else {
-              printf("jenndebug new row insert(%lu, %lu) succeeded\n", key, value);
+          // make new row
+          if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
+            tx.abort();
+            reply->set_is_committed(false);
+            printf("jenndebug failed to allocate new_row()\n");
+            return Status::CANCELLED;
           }
-      }
+          //rah.data()[0] = static_cast<char>(val);
+          memcpy(&rah.data()[0], &val, sizeof(val));
 
-      // existing reads and populating response
-      for (int i = 0; i < request->read_keyset_size(); i++) {
+          printf("jenndebug rah.cdata() %lu, val %lu\n",
+                 rah.cdata()[0], val);
 
-          uint64_t key = request->read_keyset(i);
-
-          uint64_t looked_value = 0;
-          auto lookup_result =
-                  hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
-                                   [&looked_value](auto& k, auto& v) {
-                                       (void)k;
-                                       looked_value = v;
-                                       return true;
-                                });
-
-          if (lookup_result < 1) {
-              printf("jenndebug lookup(%lu) no value\n", key);
-          } else {
-              printf("jenndebug lookup(%lu) = %lu\n", key, looked_value);
-
-              smdbrpc::KVPair *kvPair = reply->add_read_valueset();
-              kvPair->set_key(key);
-              kvPair->set_value(looked_value);
+          // insert into index
+          row_id = rah.row_id();
+          if (hash_idx->insert(&tx, key, row_id) != 1) {
+            tx.abort();
+            reply->set_is_committed(false);
+            printf("jenndebug failed to insert new row into hash_index\n");
+            return Status::CANCELLED;
           }
+        }
       }
 
-      // commit transaction
+      // commit
       Result result;
-      if (!tx.commit(&result)) {
+      if (!tx.commit(&result)){
+        tx.abort();
         reply->set_is_committed(false);
-        printf("jenndebug commit failed\n");
-      } else {
-        reply->set_is_committed(true);
-        printf("jenndebug commit succeeded\n");
+        printf("jenndebug failed to commit tx\n");
+        return Status::CANCELLED;
       }
-
-      printf("jenndebug ===============================\n");
+      reply->set_is_committed(true);
       return Status::OK;
   }
 };
@@ -273,13 +272,13 @@ int main(int argc, char** argv) {
     // jenncomment hash_idx is on a certain table
 
     if (kUseHashIndex) {
-        // bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
-        bool ret = db.create_hash_index_nonunique_u64("main_idx", tbl, num_rows);
+        bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+        //bool ret = db.create_hash_index_nonunique_u64("main_idx", tbl, num_rows);
         assert(ret);
         (void)ret;
 
-        //hash_idx = db.get_hash_index_unique_u64("main_idx");
-        hash_idx = db.get_hash_index_nonunique_u64("main_idx");
+        hash_idx = db.get_hash_index_unique_u64("main_idx");
+        //hash_idx = db.get_hash_index_nonunique_u64("main_idx");
         Transaction tx(db.context(0));
         hash_idx->init(&tx);
     }

@@ -27,7 +27,7 @@
 #define MICA_COLUMN_COUNT 1
 
 #define INDEX_STRUCT IDX_MICA
-#define MICA_FULLINDEX true
+#define MICA_FULLINDEX false
 
 #define MICA_USE_SCAN false
 #define MICA_USE_FULL_TABLE_SCAN false
