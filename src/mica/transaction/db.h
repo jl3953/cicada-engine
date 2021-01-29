@@ -161,7 +161,7 @@ struct BasicDBConfig {
   typedef ::mica::transaction::NullLogger<BasicDBConfig> Logger;
 
   // Show verbose messages.
-  static constexpr bool kVerbose = true;
+  static constexpr bool kVerbose = false;
 };
 
 template <class StaticConfig = BasicDBConfig>
