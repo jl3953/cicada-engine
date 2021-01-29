@@ -114,8 +114,6 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
           kvPair->set_key(key);
           uint64_t val;
           memcpy(&val, &rah.cdata()[0], sizeof(val));
-          printf("jenndebug val %lu, rah.cdata() %lu\n", val, rah.cdata()[0]);
-          //auto val = static_cast<uint64_t>(rah.cdata()[0]);
           kvPair->set_value(val);
         }
       }
@@ -155,9 +153,6 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
           }
           //rah.data()[0] = static_cast<char>(val);
           memcpy(&rah.data()[0], &val, sizeof(val));
-
-          printf("jenndebug rah.cdata() %lu, val %lu\n",
-                 rah.cdata()[0], val);
 
           // insert into index
           row_id = rah.row_id();
