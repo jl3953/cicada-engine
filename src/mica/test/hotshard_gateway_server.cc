@@ -132,7 +132,7 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
                                return true;
                              }) > 0) {
           // value already exists, just update it
-          if (!rah.peek_row(tbl, 0, row_id, true, true, true) ||
+          if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
               !rah.write_row()) {
             // failed to write
             tx.abort();
