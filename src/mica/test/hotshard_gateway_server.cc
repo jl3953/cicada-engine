@@ -194,6 +194,7 @@ class ServerImpl final {
 
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service_);
 
     for (int i = 0; i < concurrency; i++) {
       cq_vec_.emplace_back(builder.AddCompletionQueue().release());
@@ -206,27 +207,24 @@ class ServerImpl final {
       server_threads_.emplace_back(std::thread([this, i]{HandleRpcs(i);}));
     }
 
-    std::cout << "jenndebug server threads initialized" << std::endl;
-
     for (auto& thread: server_threads_)
       thread.join();
   }
 
  private:
+
   class CallData {
    public:
     CallData(HotshardGateway::AsyncService* service, ServerCompletionQueue* cq)
-    : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE) {
+        : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE) {
       Proceed();
     }
 
     void Proceed() {
       if (status_ == CREATE) {
-        std::cout << "jenndebug did i make it here" << std::endl;
         status_ = PROCESS;
         service_->RequestContactHotshard(&ctx_, &request_, &responder_,
                                          cq_, cq_, this);
-        std::cout << "jenndebug proceed CREATE" << std::endl;
       } else if (status_ == PROCESS) {
         reply_.set_is_committed(true);
         status_ = FINISH;
@@ -249,17 +247,14 @@ class ServerImpl final {
 
     enum CallStatus {CREATE, PROCESS, FINISH};
     CallStatus status_;
-
   };
 
   [[noreturn]] void HandleRpcs(int i) {
-    std::cout << "jenndebug handlerpcs" << std::endl;
-    new CallData(&service_, cq_vec_[static_cast<unsigned long>(i)]);
+    new CallData(&service_, cq_vec_[i]);
     void *tag;
     bool ok;
     while (true) {
-      std::cout << "jenndebug while loop waiting cq->next" << std::endl;
-      cq_vec_[static_cast<unsigned long>(i)]->Next(&tag, &ok);
+      cq_vec_[i]->Next(&tag, &ok);
       static_cast<CallData *>(tag)->Proceed();
     }
   }
