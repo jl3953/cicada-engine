@@ -489,7 +489,9 @@ int main(int argc, char** argv) {
 
     }
 
-  RunServer(num_threads);
+    db.activate(0);
+    db.activate(1);
+    RunServer(num_threads);
 
   return 0;
 }
