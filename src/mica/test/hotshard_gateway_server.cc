@@ -204,6 +204,8 @@ class ServerImpl final {
       server_threads_.emplace_back(std::thread([this, i]{HandleRpcs(i);}));
     }
 
+    std::cout << "jenndebug server threads initialized" << std::endl;
+
     for (auto& thread: server_threads_)
       thread.join();
   }
@@ -221,6 +223,7 @@ class ServerImpl final {
         status_ = PROCESS;
         service_->RequestContactHotshard(&ctx_, &request_, &responder_,
                                          cq_, cq_, this);
+        std::cout << "jenndebug proceed CREATE" << std::endl;
       } else if (status_ == PROCESS) {
         reply_.set_is_committed(true);
         status_ = FINISH;
@@ -247,10 +250,12 @@ class ServerImpl final {
   };
 
   [[noreturn]] void HandleRpcs(int i) {
+    std::cout << "jenndebug handlerpcs" << std::endl;
     new CallData(&service_, cq_vec_[static_cast<unsigned long>(i)]);
     void *tag;
     bool ok;
     while (true) {
+      std::cout << "jenndebug while loop waiting cq->next" << std::endl;
       cq_vec_[static_cast<unsigned long>(i)]->Next(&tag, &ok);
       static_cast<CallData *>(tag)->Proceed();
     }
