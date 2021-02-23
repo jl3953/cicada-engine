@@ -489,8 +489,8 @@ int main(int argc, char** argv) {
 
     }
 
-    db.activate(0);
-    db.activate(1);
+    for (int i = 0; i < num_threads; i++)
+      db.activate(num_threads);
     RunServer(num_threads);
 
   return 0;
