@@ -220,6 +220,7 @@ class ServerImpl final {
 
     void Proceed() {
       if (status_ == CREATE) {
+        std::cout << "jenndebug did i make it here" << std::endl;
         status_ = PROCESS;
         service_->RequestContactHotshard(&ctx_, &request_, &responder_,
                                          cq_, cq_, this);
@@ -272,6 +273,8 @@ void RunServer(int givenConcurrency) {
   int concurrency = static_cast<int>(std::thread::hardware_concurrency());
   if (givenConcurrency > 0)
     concurrency = givenConcurrency;
+
+  std::cout << "concurrency " << concurrency << std::endl;
 
   ServerImpl server;
   server.Run(concurrency);
