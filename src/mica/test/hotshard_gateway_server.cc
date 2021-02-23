@@ -178,25 +178,98 @@ class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
   }
 };
 
-void RunServer() {
-  std::string server_address("0.0.0.0:50051");
-  HotshardGatewayServiceImpl service;
+class ServerImpl final {
+ public:
+  ~ServerImpl() {
+    server_->Shutdown();
 
-  grpc::EnableDefaultHealthCheckService(true);
-  grpc::reflection::InitProtoReflectionServerBuilderPlugin();
-  ServerBuilder builder;
-  // Listen on the given address without any authentication mechanism.
-  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-  // Register "service" as the instance through which we'll communicate with
-  // clients. In this case it corresponds to an *synchronous* service.
-  builder.RegisterService(&service);
-  // Finally assemble the server.
-  std::unique_ptr<Server> server(builder.BuildAndStart());
-  std::cout << "Server listening on " << server_address << std::endl;
+    for (auto& cq: cq_vec_)
+      cq->Shutdown();
+  }
 
-  // Wait for the server to shutdown. Note that some other thread must be
-  // responsible for shutting down the server for this call to ever return.
-  server->Wait();
+  void Run(int concurrency) {
+    std::string server_address("0.0.0.0:50051");
+
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+
+    for (int i = 0; i < concurrency; i++) {
+      cq_vec_.emplace_back(builder.AddCompletionQueue().release());
+    }
+
+    server_ = builder.BuildAndStart().release();
+    std::cout << "Server listening on" << server_address << std::endl;
+
+    for (int i = 0; i < concurrency; i++) {
+      server_threads_.emplace_back(std::thread([this, i]{HandleRpcs(i);}));
+    }
+
+    for (auto& thread: server_threads_)
+      thread.join();
+  }
+
+ private:
+  class CallData {
+   public:
+    CallData(HotshardGateway::AsyncService* service, grpc::ServerCompletionQueue* cq)
+    : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE) {
+      Proceed();
+    }
+
+    void Proceed() {
+      if (status_ == CREATE) {
+        status_ = PROCESS;
+        service_->RequestContactHotshard(&ctx_, &request_, &responder_,
+                                         cq_, cq_, this);
+      } else if (status_ == PROCESS) {
+        reply_.set_is_committed(true);
+        status_ = FINISH;
+        responder_.Finish(reply_, Status::OK, this);
+      } else {
+        new CallData(service_, cq_);
+        delete this;
+      }
+    }
+
+   private:
+    HotshardGateway::AsyncService* service_;
+    grpc::ServerCompletionQueue* cq_;
+    ServerContext ctx_;
+
+    HotshardRequest request_;
+    HotshardReply reply_;
+
+    grpc::ServerAsyncResponseWriter<HotshardReply> responder_;
+
+    enum CallStatus {CREATE, PROCESS, FINISH};
+    CallStatus status_;
+
+  };
+
+  [[noreturn]] void HandleRpcs(int i) {
+    new CallData(&service_, cq_vec_[static_cast<unsigned long>(i)]);
+    void *tag;
+    bool ok;
+    while (true) {
+      cq_vec_[static_cast<unsigned long>(i)]->Next(&tag, &ok);
+      static_cast<CallData *>(tag)->Proceed();
+    }
+  }
+
+  std::vector<grpc::ServerCompletionQueue*> cq_vec_;
+  HotshardGateway::AsyncService service_;
+  Server* server_;
+  std::list<std::thread> server_threads_;
+};
+
+void RunServer(int givenConcurrency) {
+
+  int concurrency = static_cast<int>(std::thread::hardware_concurrency());
+  if (givenConcurrency > 0)
+    concurrency = givenConcurrency;
+
+  ServerImpl server;
+  server.Run(concurrency);
 }
 
 int main(int argc, char** argv) {
@@ -410,7 +483,7 @@ int main(int argc, char** argv) {
 
     }
 
-  RunServer();
+  RunServer(num_threads);
 
   return 0;
 }
