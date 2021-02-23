@@ -198,7 +198,7 @@ class ServerImpl final {
     }
 
     server_ = builder.BuildAndStart().release();
-    std::cout << "Server listening on" << server_address << std::endl;
+    std::cout << "Server listening on " << server_address << std::endl;
 
     for (int i = 0; i < concurrency; i++) {
       server_threads_.emplace_back(std::thread([this, i]{HandleRpcs(i);}));
@@ -280,7 +280,8 @@ int main(int argc, char** argv) {
     double read_ratio = /*atof(argv[3]);*/ 0.5;
     double zipf_theta = /*atof(argv[4]);*/ 0.9;
     uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 100;
-    uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
+    //uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
+    auto num_threads = static_cast<uint64_t>(atol(argv[1]));
 
     Alloc alloc(config.get("alloc"));
     auto page_pool_size = 24 * uint64_t(1073741824);
