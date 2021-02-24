@@ -226,6 +226,102 @@ class ServerImpl final {
         service_->RequestContactHotshard(&ctx_, &request_, &responder_,
                                          cq_, cq_, this);
       } else if (status_ == PROCESS) {
+
+        auto tbl = db_ptr->get_table("main");
+        ::mica::util::lcore.pin_thread(0);
+
+        db_ptr->activate(static_cast<uint16_t>(0));
+        Transaction tx(db_ptr->context(0));
+
+        Timestamp assigned_ts = Timestamp::make(
+            0, static_cast<uint64_t>(request_.hlctimestamp().walltime()), 0);
+        if (!tx.begin(false, nullptr, &assigned_ts)) {
+          printf("jenndebug tx.begin() failed.\n");
+          //reply_.set_is_committed(false);
+          responder_.FinishWithError(Status::CANCELLED, this);
+        }
+
+//        // reads
+//        for (uint64_t key : request->read_keyset()) {
+//          auto row_id = static_cast<uint64_t>(-1);
+//          if (hash_idx->lookup(&tx, key, true /*skip_validation*/,
+//                               [&row_id](auto& k, auto& v) {
+//                                 (void)k;
+//                                 row_id = v;
+//                                 return true; /* jenndebug is this correct? */
+//                               }) > 0) {
+//            // value being read is found
+//            RowAccessHandle rah(&tx);
+//            if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
+//                !rah.read_row()) {
+//              // failed to read value for whatever reason
+//              tx.abort();
+//              reply->set_is_committed(false);
+//              printf("jenndebug reads failed to peek/read row()\n");
+//              return Status::CANCELLED;
+//            }
+//            smdbrpc::KVPair* kvPair = reply->add_read_valueset();
+//            kvPair->set_key(key);
+//            uint64_t val;
+//            memcpy(&val, &rah.cdata()[0], sizeof(val));
+//            kvPair->set_value(val);
+//          }
+//        }
+
+        // writes
+        for (int i = 0; i < request_.write_keyset_size(); i++) {
+          uint64_t key = request_.write_keyset(i).key();
+          uint64_t val = request_.write_keyset(i).value();
+
+          RowAccessHandle rah(&tx);
+          auto row_id = static_cast<uint64_t>(-1);
+          if (hash_idx->lookup(&tx, key, true, [&row_id](auto& k, auto& v) {
+                (void)k;
+                row_id = v;
+                return true;
+              }) > 0) {
+            // value already exists, just update it
+            if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
+                !rah.write_row()) {
+              // failed to write
+              tx.abort();
+              //reply->set_is_committed(false);
+              printf("jenndebug failed to peek/write rows\n");
+              responder_.FinishWithError(Status::CANCELLED, this);
+            }
+            memcpy(&rah.data()[0], &val, sizeof(val));
+          } else {
+            // value does not exist yet. Create row and insert into index.
+
+            // make new row
+            if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
+              tx.abort();
+              //reply_.set_is_committed(false);
+              printf("jenndebug failed to allocate new_row()\n");
+              responder_.FinishWithError(Status::CANCELLED, this);
+            }
+            memcpy(&rah.data()[0], &val, sizeof(val));
+
+            // insert into index
+            row_id = rah.row_id();
+            if (hash_idx->insert(&tx, key, row_id) != 1) {
+              tx.abort();
+              //reply->set_is_committed(false);
+              printf("jenndebug failed to insert new row into hash_index\n");
+              responder_.FinishWithError(Status::CANCELLED, this);
+            }
+          }
+        }
+
+        // commit
+        Result result;
+        if (!tx.commit(&result)) {
+          tx.abort();
+          //reply_->set_is_committed(false);
+          printf("jenndebug failed to commit tx\n");
+          responder_.FinishWithError(Status::CANCELLED, this);
+        }
+
         reply_.set_is_committed(true);
         status_ = FINISH;
         responder_.Finish(reply_, Status::OK, this);
@@ -489,8 +585,6 @@ int main(int argc, char** argv) {
 
     }
 
-    for (int i = 0; i < num_threads; i++)
-      db.activate(num_threads);
     RunServer(num_threads);
 
   return 0;
