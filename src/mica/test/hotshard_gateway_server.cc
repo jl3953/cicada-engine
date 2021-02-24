@@ -322,11 +322,11 @@ class ServerImpl final {
           reply_.set_is_committed(false);
           printf("jenndebug failed to commit tx\n");
           responder_.Finish(reply_, Status::OK, this);
+        } else {
+          reply_.set_is_committed(true);
+          status_ = FINISH;
+          responder_.Finish(reply_, Status::OK, this);
         }
-
-        reply_.set_is_committed(true);
-        status_ = FINISH;
-        responder_.Finish(reply_, Status::OK, this);
       } else {
         new CallData(service_, cq_, thread_id_);
         delete this;
