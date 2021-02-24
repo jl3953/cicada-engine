@@ -229,11 +229,13 @@ class ServerImpl final {
                                          cq_, cq_, this);
       } else if (status_ == PROCESS) {
 
+        status_ = FINISH;
+
         auto tbl = db_ptr->get_table("main");
         ::mica::util::lcore.pin_thread(static_cast<size_t>(thread_id_));
 
-        db_ptr->activate(static_cast<uint16_t>(0));
-        Transaction tx(db_ptr->context(0));
+        db_ptr->activate(static_cast<uint16_t>(thread_id_));
+        Transaction tx(db_ptr->context(thread_id_));
 
         Timestamp assigned_ts = Timestamp::make(
             0, static_cast<uint64_t>(request_.hlctimestamp().walltime()), 0);
@@ -241,6 +243,7 @@ class ServerImpl final {
           printf("jenndebug tx.begin() failed.\n");
           reply_.set_is_committed(false);
           responder_.Finish(reply_, Status::OK, this);
+	  return;
         }
 
 //        // reads
@@ -290,6 +293,7 @@ class ServerImpl final {
               reply_.set_is_committed(false);
               printf("jenndebug failed to peek/write rows\n");
               responder_.Finish(reply_, Status::OK, this);
+	      return;
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
           } else {
@@ -301,6 +305,7 @@ class ServerImpl final {
               reply_.set_is_committed(false);
               printf("jenndebug failed to allocate new_row()\n");
               responder_.Finish(reply_, Status::OK, this);
+	      return;
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
 
@@ -311,6 +316,7 @@ class ServerImpl final {
               reply_.set_is_committed(false);
               printf("jenndebug failed to insert new row into hash_index\n");
               responder_.Finish(reply_, Status::OK, this);
+	      return;
             }
           }
         }
@@ -321,12 +327,13 @@ class ServerImpl final {
           tx.abort();
           reply_.set_is_committed(false);
           printf("jenndebug failed to commit tx\n");
-          responder_.Finish(reply_, Status::OK, this);
-        } else {
-          reply_.set_is_committed(true);
-          status_ = FINISH;
-          responder_.Finish(reply_, Status::OK, this);
+          responder_.FinishWithError(Status::CANCELLED, this);
+	  return;
         }
+
+        reply_.set_is_committed(true);
+        responder_.Finish(reply_, Status::OK, this);
+
       } else {
         new CallData(service_, cq_, thread_id_);
         delete this;
