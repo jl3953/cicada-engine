@@ -215,8 +215,10 @@ class ServerImpl final {
 
   class CallData {
    public:
-    CallData(HotshardGateway::AsyncService* service, ServerCompletionQueue* cq)
-        : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE) {
+    CallData(HotshardGateway::AsyncService* service, ServerCompletionQueue* cq,
+             int thread_id)
+        : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE),
+          thread_id_(thread_id){
       Proceed();
     }
 
@@ -228,7 +230,7 @@ class ServerImpl final {
       } else if (status_ == PROCESS) {
 
         auto tbl = db_ptr->get_table("main");
-        ::mica::util::lcore.pin_thread(0);
+        ::mica::util::lcore.pin_thread(static_cast<size_t>(thread_id_));
 
         db_ptr->activate(static_cast<uint16_t>(0));
         Transaction tx(db_ptr->context(0));
@@ -326,12 +328,13 @@ class ServerImpl final {
         status_ = FINISH;
         responder_.Finish(reply_, Status::OK, this);
       } else {
-        new CallData(service_, cq_);
+        new CallData(service_, cq_, thread_id_);
         delete this;
       }
     }
 
    private:
+    int thread_id_;
     HotshardGateway::AsyncService* service_;
     ServerCompletionQueue* cq_;
     ServerContext ctx_;
@@ -346,7 +349,7 @@ class ServerImpl final {
   };
 
   [[noreturn]] void HandleRpcs(int i) {
-    new CallData(&service_, cq_vec_[i]);
+    new CallData(&service_, cq_vec_[i], i);
     void *tag;
     bool ok;
     while (true) {
