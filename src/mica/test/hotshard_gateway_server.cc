@@ -237,8 +237,8 @@ class ServerImpl final {
             0, static_cast<uint64_t>(request_.hlctimestamp().walltime()), 0);
         if (!tx.begin(false, nullptr, &assigned_ts)) {
           printf("jenndebug tx.begin() failed.\n");
-          //reply_.set_is_committed(false);
-          responder_.FinishWithError(Status::CANCELLED, this);
+          reply_.set_is_committed(false);
+          responder_.Finish(reply_, Status::CANCELLED, this);
         }
 
 //        // reads
@@ -285,9 +285,9 @@ class ServerImpl final {
                 !rah.write_row()) {
               // failed to write
               tx.abort();
-              //reply->set_is_committed(false);
+              reply_.set_is_committed(false);
               printf("jenndebug failed to peek/write rows\n");
-              responder_.FinishWithError(Status::CANCELLED, this);
+              responder_.Finish(reply_, Status::CANCELLED, this);
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
           } else {
@@ -296,9 +296,9 @@ class ServerImpl final {
             // make new row
             if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
               tx.abort();
-              //reply_.set_is_committed(false);
+              reply_.set_is_committed(false);
               printf("jenndebug failed to allocate new_row()\n");
-              responder_.FinishWithError(Status::CANCELLED, this);
+              responder_.Finish(reply_, Status::CANCELLED, this);
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
 
@@ -306,9 +306,9 @@ class ServerImpl final {
             row_id = rah.row_id();
             if (hash_idx->insert(&tx, key, row_id) != 1) {
               tx.abort();
-              //reply->set_is_committed(false);
+              reply_.set_is_committed(false);
               printf("jenndebug failed to insert new row into hash_index\n");
-              responder_.FinishWithError(Status::CANCELLED, this);
+              responder_.Finish(reply_, Status::CANCELLED, this);
             }
           }
         }
@@ -317,9 +317,9 @@ class ServerImpl final {
         Result result;
         if (!tx.commit(&result)) {
           tx.abort();
-          //reply_->set_is_committed(false);
+          reply_.set_is_committed(false);
           printf("jenndebug failed to commit tx\n");
-          responder_.FinishWithError(Status::CANCELLED, this);
+          responder_.Finish(reply_, Status::CANCELLED, this);
         }
 
         reply_.set_is_committed(true);
