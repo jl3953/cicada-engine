@@ -238,7 +238,7 @@ class ServerImpl final {
         if (!tx.begin(false, nullptr, &assigned_ts)) {
           printf("jenndebug tx.begin() failed.\n");
           reply_.set_is_committed(false);
-          responder_.Finish(reply_, Status::CANCELLED, this);
+          responder_.Finish(reply_, Status::OK, this);
         }
 
 //        // reads
@@ -287,7 +287,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               printf("jenndebug failed to peek/write rows\n");
-              responder_.Finish(reply_, Status::CANCELLED, this);
+              responder_.Finish(reply_, Status::OK, this);
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
           } else {
@@ -298,7 +298,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               printf("jenndebug failed to allocate new_row()\n");
-              responder_.Finish(reply_, Status::CANCELLED, this);
+              responder_.Finish(reply_, Status::OK, this);
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
 
@@ -308,7 +308,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               printf("jenndebug failed to insert new row into hash_index\n");
-              responder_.Finish(reply_, Status::CANCELLED, this);
+              responder_.Finish(reply_, Status::OK, this);
             }
           }
         }
@@ -319,7 +319,7 @@ class ServerImpl final {
           tx.abort();
           reply_.set_is_committed(false);
           printf("jenndebug failed to commit tx\n");
-          responder_.Finish(reply_, Status::CANCELLED, this);
+          responder_.Finish(reply_, Status::OK, this);
         }
 
         reply_.set_is_committed(true);
