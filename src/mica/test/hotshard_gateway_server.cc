@@ -240,38 +240,45 @@ class ServerImpl final {
         Timestamp assigned_ts = Timestamp::make(
             0, static_cast<uint64_t>(request_.hlctimestamp().walltime()), 0);
         if (!tx.begin(false, nullptr, &assigned_ts)) {
-          printf("jenndebug tx.begin() failed.\n");
+          const std::string& err_msg ="jenndebug tx.begin() failed";
+          printf("%s\n", err_msg.c_str());
           //reply_.set_is_committed(false);
-          responder_.FinishWithError(Status::CANCELLED, this);
+          responder_.FinishWithError(
+              Status(Status::CANCELLED.error_code(), err_msg),
+              this);
 	  return;
         }
 
-//        // reads
-//        for (uint64_t key : request->read_keyset()) {
-//          auto row_id = static_cast<uint64_t>(-1);
-//          if (hash_idx->lookup(&tx, key, true /*skip_validation*/,
-//                               [&row_id](auto& k, auto& v) {
-//                                 (void)k;
-//                                 row_id = v;
-//                                 return true; /* jenndebug is this correct? */
-//                               }) > 0) {
-//            // value being read is found
-//            RowAccessHandle rah(&tx);
-//            if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
-//                !rah.read_row()) {
-//              // failed to read value for whatever reason
-//              tx.abort();
-//              reply->set_is_committed(false);
-//              printf("jenndebug reads failed to peek/read row()\n");
-//              return Status::CANCELLED;
-//            }
-//            smdbrpc::KVPair* kvPair = reply->add_read_valueset();
-//            kvPair->set_key(key);
-//            uint64_t val;
-//            memcpy(&val, &rah.cdata()[0], sizeof(val));
-//            kvPair->set_value(val);
-//          }
-//        }
+        // reads
+        for (uint64_t key : request_.read_keyset()) {
+          auto row_id = static_cast<uint64_t>(-1);
+          if (hash_idx->lookup(&tx, key, true /*skip_validation*/,
+                               [&row_id](auto& k, auto& v) {
+                                 (void)k;
+                                 row_id = v;
+                                 return true; /* jenndebug is this correct? */
+                               }) > 0) {
+            // value being read is found
+            RowAccessHandle rah(&tx);
+            if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
+                !rah.read_row()) {
+              // failed to read value for whatever reason
+              tx.abort();
+              reply_.set_is_committed(false);
+              const std::string& err_msg = "jenndebug reads failed to peek/read row()";
+              printf("%s\n", err_msg.c_str());
+              responder_.FinishWithError(
+                  Status(Status::CANCELLED.error_code(), err_msg),
+                  this);
+              return;
+            }
+            smdbrpc::KVPair* kvPair = reply_.add_read_valueset();
+            kvPair->set_key(key);
+            uint64_t val;
+            memcpy(&val, &rah.cdata()[0], sizeof(val));
+            kvPair->set_value(val);
+          }
+        }
 
         // writes
         for (int i = 0; i < request_.write_keyset_size(); i++) {
