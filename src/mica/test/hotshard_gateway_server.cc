@@ -235,14 +235,14 @@ class ServerImpl final {
         ::mica::util::lcore.pin_thread(static_cast<size_t>(thread_id_));
 
         db_ptr->activate(static_cast<uint16_t>(thread_id_));
-        Transaction tx(db_ptr->context(thread_id_));
+        Transaction tx(db_ptr->context(static_cast<uint16_t>(thread_id_)));
 
         Timestamp assigned_ts = Timestamp::make(
             0, static_cast<uint64_t>(request_.hlctimestamp().walltime()), 0);
         if (!tx.begin(false, nullptr, &assigned_ts)) {
           printf("jenndebug tx.begin() failed.\n");
-          reply_.set_is_committed(false);
-          responder_.Finish(reply_, Status::OK, this);
+          //reply_.set_is_committed(false);
+          responder_.FinishWithError(Status::CANCELLED, this);
 	  return;
         }
 
@@ -291,8 +291,11 @@ class ServerImpl final {
               // failed to write
               tx.abort();
               reply_.set_is_committed(false);
-              printf("jenndebug failed to peek/write rows\n");
-              responder_.Finish(reply_, Status::OK, this);
+              const char* err_msg = "jenndebug failed to peek/write rows";
+              printf("%s\n", err_msg);
+              responder_.FinishWithError(
+                  Status(Status::CANCELLED.error_code(), err_msg),
+                  this);
 	      return;
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
@@ -303,8 +306,11 @@ class ServerImpl final {
             if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
               tx.abort();
               reply_.set_is_committed(false);
-              printf("jenndebug failed to allocate new_row()\n");
-              responder_.Finish(reply_, Status::OK, this);
+              const std::string& err_msg ="jenndebug failed to allocate new_row()";
+              printf("%s\n", err_msg.c_str());
+              responder_.FinishWithError(
+                      Status(Status::CANCELLED.error_code(), err_msg),
+                      this);
 	      return;
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
@@ -314,8 +320,11 @@ class ServerImpl final {
             if (hash_idx->insert(&tx, key, row_id) != 1) {
               tx.abort();
               reply_.set_is_committed(false);
-              printf("jenndebug failed to insert new row into hash_index\n");
-              responder_.Finish(reply_, Status::OK, this);
+              const std::string& err_msg = "jenndebug failed to insert new row into hash_index";
+              printf("%s\n", err_msg.c_str());
+              responder_.FinishWithError(
+                  Status(Status::CANCELLED.error_code(), err_msg),
+                  this);
 	      return;
             }
           }
@@ -326,8 +335,11 @@ class ServerImpl final {
         if (!tx.commit(&result)) {
           tx.abort();
           reply_.set_is_committed(false);
-          printf("jenndebug failed to commit tx\n");
-          responder_.FinishWithError(Status::CANCELLED, this);
+          const std::string& err_msg ="jenndebug failed to commit tx";
+          printf("%s\n", err_msg.c_str());
+          responder_.FinishWithError(
+              Status(Status::CANCELLED.error_code(), err_msg),
+              this);
 	  return;
         }
 
