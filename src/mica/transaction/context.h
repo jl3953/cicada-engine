@@ -2,9 +2,7 @@
 #ifndef MICA_TRANSACTION_CONTEXT_H_
 #define MICA_TRANSACTION_CONTEXT_H_
 
-#include <execinfo.h>
 #include <queue>
-#include <zconf.h>
 #include "mica/transaction/stats.h"
 #include "mica/transaction/row.h"
 #include "mica/transaction/table.h"
@@ -70,7 +68,8 @@ class Context {
   uint64_t clock() const { return clock_; }
 
   Timestamp wts() const { return wts_.get(); }
-  Timestamp rts() const { return rts_.get(); }
+  Timestamp rts() const { //printf("jenndebug rts\n");
+  return rts_.get(); }
 
   uint16_t thread_id() const { return thread_id_; }
   uint8_t numa_id() const { return numa_id_; }
@@ -164,7 +163,6 @@ class Context {
     const uint16_t era = 0;
 
     auto wts = Timestamp::make(era, adjusted_clock, thread_id_);
-    printf("jenndebug generate_timestamp() write\n");
     wts_.write(wts);
 
     Timestamp rts = db_->min_wts();
@@ -172,10 +170,6 @@ class Context {
     // subtracting 1 because (1) every thread does it and (2) timestamp
     // collisions are benign for read-only transactions.
     rts.t2--;
-    void *array[100];
-    int size = backtrace(array, 100);
-    backtrace_symbols_fd(array, size, STDERR_FILENO);
-    printf("jenndebug generate_timestamp() read\n");
     rts_.write(rts);
 
     if (for_peek_only_transaction)

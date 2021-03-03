@@ -392,13 +392,13 @@ int main(int argc, const char* argv[]) {
   Alloc alloc(config.get("alloc"));
   auto page_pool_size = 24 * uint64_t(1073741824);
   PagePool* page_pools[2];
-  // if (num_threads == 1) {
-  //   page_pools[0] = new PagePool(&alloc, page_pool_size, 0);
-  //   page_pools[1] = nullptr;
-  // } else {
-  page_pools[0] = new PagePool(&alloc, page_pool_size / 2, 0);
-  page_pools[1] = new PagePool(&alloc, page_pool_size / 2, 1);
-  // }
+  if (num_threads == 1) {
+    page_pools[0] = new PagePool(&alloc, page_pool_size, 0);
+    page_pools[1] = nullptr;
+  } else {
+    page_pools[0] = new PagePool(&alloc, page_pool_size / 2, 0);
+    page_pools[1] = new PagePool(&alloc, page_pool_size / 2, 1);
+  }
 
   ::mica::util::lcore.pin_thread(0);
 
@@ -430,39 +430,36 @@ int main(int argc, const char* argv[]) {
   printf("\n");
 
   Logger logger;
-  printf("jenndebug -3\n");
   DB db(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
 
-  printf("jenndebug -2\n");
   const bool kVerify =
       typeid(typename DBConfig::Logger) == typeid(VerificationLogger<DBConfig>);
 
   const uint64_t data_sizes[] = {kDataSize};
-  printf("jenndebug -1\n");
   bool ret = db.create_table("main", 1, data_sizes);
   assert(ret);
   (void)ret;
 
-  printf("jenndebug 0\n");
   auto tbl = db.get_table("main");
-  printf("jenndebug 1\n");
+  printf("jenndebug\n");
 
   db.activate(0);
-  printf("jenndebug 2\n");
+  printf("jenndebug2\n");
 
   HashIndex* hash_idx = nullptr;
   if (kUseHashIndex) {
-    printf("jenndebug 3\n");
+    printf("jenndebug3\n");
     bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+    printf("jenndebug4\n");
     assert(ret);
     (void)ret;
-    printf("jenndebug 4\n");
 
     hash_idx = db.get_hash_index_unique_u64("main_idx");
-    printf("jenndebug it here?\n");
+    printf("jenndebug5\n");
     Transaction tx(db.context(0));
-    printf("jenndebug or it here?\n");
+    printf("jenndebug6\n");
     hash_idx->init(&tx);
+    printf("jenndebug7\n");
   }
 
   BTreeIndex* btree_idx = nullptr;

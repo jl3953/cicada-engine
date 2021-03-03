@@ -83,7 +83,6 @@ void Context<StaticConfig>::gc(bool forced) {
              "\n",
              thread_id_, db_->min_rts().t2, gc_info->gc_ts.get().t2);
 
-    printf("jenndebug gc()\n");
     gc_info->gc_ts.write(ts);
 
     if (StaticConfig::kVerbose)

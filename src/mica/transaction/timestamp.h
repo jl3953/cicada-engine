@@ -4,6 +4,8 @@
 
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include "mica/common.h"
 #include "mica/util/barrier.h"
 
@@ -66,7 +68,6 @@ struct CompactConcurrentTimestamp {
   void init(const CompactTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a is not being read by others.
     t2 = b.t2;
-    printf("jenndebug compact init\n");
   }
 
   void write(const CompactTimestamp& b) {
@@ -154,10 +155,12 @@ struct WideConcurrentTimestamp {
   volatile uint64_t t1;
   volatile uint64_t t2;
   volatile uint64_t version;
+  int random;
 
   WideTimestamp get() const {
     // Get a stable (not mutating) version of concurrent ts.
     WideTimestamp ts;
+    //fprintf(stderr, "jenndebug wide version %ld random %d\n", version, random);
     while (true) {
       uint64_t cts_version = version;
       if ((cts_version & 1) != 0) {
@@ -178,27 +181,30 @@ struct WideConcurrentTimestamp {
 
   void init(const WideTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a is not being read by others.
-    printf("jenndebug widetimestamp init\n");
     t1 = b.t1;
     t2 = b.t2;
     version = 0;
-    printf("jenndebug version init %ld\n", version);
+    //time_t t;
+    //srand((unsigned) time(&t));
+    //random = rand() % 1000;
+    //fprintf(stderr, "jenndebug init version %ld, random %d\n", version, random);
   }
 
   void write(const WideTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a may be being read by others.
-    printf("jenndebug version %ld\n", version);
-    assert((version & 1) == 0); // jenncomment ensure version is even
+    // fprintf(stderr, "jenndebug version pre-write %ld, random %d\n", version, random);
+    assert((version & 1) == 0);
     version++;
-    printf("jenndebug version change write 1 %ld\n", version);
+    //fprintf(stderr, "jenndebug version++ write %ld random %d\n", version, random);
     ::mica::util::memory_barrier();
 
     t1 = b.t1;
     t2 = b.t2;
 
     ::mica::util::memory_barrier();
+    //fprintf(stderr, "jenndebug version pre-write2 %ld random %d\n", version, random);
     version++;
-    printf("jenndebug version change write 2 %ld\n", version);
+    //fprintf(stderr, "jenndebug version++ write2 %ld random %d\n", version, random);
   }
 
   void update(const WideTimestamp& b) {
@@ -209,10 +215,10 @@ struct WideConcurrentTimestamp {
         cts_version &= ~uint64_t(1);
         uint64_t cts_new_version = cts_version + 1;
 
-        printf("jenndebug maybe version change? %ld\n", version);
+        //fprintf(stderr, "jenndebug version pre-update0\n");
         uint64_t actual_cts_version =
             __sync_val_compare_and_swap(&version, cts_version, cts_new_version);
-        printf("jenndebug did version change? %ld\n", version);
+        //fprintf(stderr, "jenndebug version swap update0\n");
         if (actual_cts_version == cts_version) break;
 
         ::mica::util::pause();
@@ -226,8 +232,9 @@ struct WideConcurrentTimestamp {
       }
 
       ::mica::util::memory_barrier();
+      //fprintf(stderr, "jenndebug version pre-update %ld random %d\n", version, random);
       version++;
-      printf("jenndebug version change constructor %ld\n", version);
+      //fprintf(stderr, "jenndebug version++ update %ld random %d\n", version, random);
     }
   }
 };
@@ -291,7 +298,6 @@ struct CentralizedConcurrentTimestamp {
 
   void init(const CentralizedTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a is not being read by others.
-    printf("jenndebug centralizedtimestamp init\n");
     t2 = b.t2;
   }
 
