@@ -141,7 +141,7 @@ bool DB<StaticConfig>::create_btree_index_nonunique_u64(
 
 template <class StaticConfig>
 void DB<StaticConfig>::activate(uint16_t thread_id) {
-  printf("DB::activate(): thread_id=%hu\n", thread_id);
+  //printf("DB::activate(): thread_id=%hu\n", thread_id);
   if (thread_active_[thread_id]) return;
 
   if (!clock_init_[thread_id]) {
@@ -161,7 +161,7 @@ void DB<StaticConfig>::activate(uint16_t thread_id) {
   // auto init_gc_epoch = gc_epoch_;
 
   ::mica::util::memory_barrier();
-  printf("jenndebug act\n");
+  //printf("jenndebug act\n");
 
   // Keep updating timestamp until it is reflected to min_wts and min_rts.
   while (/*gc_epoch_ - init_gc_epoch < 2 ||*/ min_wts() >
@@ -181,10 +181,10 @@ void DB<StaticConfig>::activate(uint16_t thread_id) {
     ctxs_[thread_id]->generate_timestamp();
     printf("jenndebug act while5\n");
   }
-  printf("jenndebug act3\n");
+  //printf("jenndebug act3\n");
 
   __sync_fetch_and_add(&active_thread_count_, 1);
-  printf("jenndebug act4\n");
+  //printf("jenndebug act4\n");
 }
 
 template <class StaticConfig>
