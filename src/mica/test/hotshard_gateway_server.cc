@@ -406,10 +406,10 @@ int main(int argc, char** argv) {
     auto config = ::mica::util::Config::load_file("test_tx.json");
 
     uint64_t num_rows = /* static_cast<uint64_t>(atol(argv[1]));*/ 100;
-    uint64_t reqs_per_tx = /*static_cast<uint64_t>(atol(argv[2]));*/ 2;
-    double read_ratio = /*atof(argv[3]);*/ 0.5;
-    double zipf_theta = /*atof(argv[4]);*/ 0.9;
-    uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 100;
+    uint64_t reqs_per_tx = /*static_cast<uint64_t>(atol(argv[2]));*/ 16;
+    double read_ratio = /*atof(argv[3]);*/ 0.95;
+    double zipf_theta = /*atof(argv[4]);*/ 0.99;
+    uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 20000;
     //uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
     auto num_threads = static_cast<uint64_t>(atol(argv[1]));
 
@@ -459,27 +459,36 @@ int main(int argc, char** argv) {
     // DB db(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
 
 
+    printf("more jenndebug\n");
     const uint64_t data_sizes[] = {kDataSize};
     bool ret = db.create_table("main", 1, data_sizes);
     assert(ret);
     (void)ret;
 
+    fprintf(stderr, "more jenndebug\n");
     auto tbl = db.get_table("main");
+    fprintf(stderr, "jenndebug\n");
 
     db.activate(0);
+    printf("jenndebug2\n");
 
     // jenncomment hash_idx is on a certain table
 
     if (kUseHashIndex) {
+        printf("jenndebug3\n");
         bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+        printf("jenndebug4\n");
         //bool ret = db.create_hash_index_nonunique_u64("main_idx", tbl, num_rows);
         assert(ret);
         (void)ret;
 
         hash_idx = db.get_hash_index_unique_u64("main_idx");
+        printf("jenndebug5\n");
         //hash_idx = db.get_hash_index_nonunique_u64("main_idx");
         Transaction tx(db.context(0));
+        printf("jenndebug6\n");
         hash_idx->init(&tx);
+        printf("jenndebug7\n");
     }
 
     {
@@ -565,22 +574,23 @@ int main(int argc, char** argv) {
                     }
 
                     /** jennsection **/
-                    tx.begin();
+                    //tx.begin();
 
-                    uint64_t value = 0;
-                    for (const auto& key : keys) {
-                        auto lookup_result =
-                                hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
-                                                 [&value](auto& k, auto& v) {
-                                                     (void)k;
-                                                     value = v;
-                                                     return true;
-                                                 });
-                        printf("jenndebug found %lu, (%lu, %lu)\n", lookup_result, key, value);
-                    }
-                    Result result;
-                    tx.commit(&result);
+                    //uint64_t value = 0;
+                    //for (const auto& key : keys) {
+                    //    auto lookup_result =
+                    //            hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
+                    //                             [&value](auto& k, auto& v) {
+                    //                                 (void)k;
+                    //                                 value = v;
+                    //                                 return true;
+                    //                             });
+                    //    printf("jenndebug found %lu, (%lu, %lu)\n", lookup_result, key, value);
+                    //}
+                    //Result result;
+                    //tx.commit(&result);
                     /** end jennsection **/
+                    printf("jenndebug allright\n");
 
                 }
 

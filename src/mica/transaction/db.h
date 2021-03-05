@@ -144,10 +144,10 @@ struct BasicDBConfig {
   // WideTimestamp for up to 2.5 B years of consecutive execution with up to 4
   // Bi cores @ 1 THz, with an up to 10% throughput penalty and 24 bytes
   // overhead per row version (effectively no space overhead due to alignment).
-  typedef ::mica::transaction::CompactTimestamp Timestamp;
-  typedef ::mica::transaction::CompactConcurrentTimestamp ConcurrentTimestamp;
-  // typedef ::mica::transaction::WideTimestamp Timestamp;
-  // typedef ::mica::transaction::WideConcurrentTimestamp ConcurrentTimestamp;
+  // typedef ::mica::transaction::CompactTimestamp Timestamp;
+  // typedef ::mica::transaction::CompactConcurrentTimestamp ConcurrentTimestamp;
+  typedef ::mica::transaction::WideTimestamp Timestamp;
+  typedef ::mica::transaction::WideConcurrentTimestamp ConcurrentTimestamp;
   // typedef ::mica::transaction::CentralizedTimestamp Timestamp;
   // typedef ::mica::transaction::CentralizedConcurrentTimestamp
   // ConcurrentTimestamp;

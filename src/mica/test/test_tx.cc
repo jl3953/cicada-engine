@@ -120,11 +120,6 @@ void setup_logger(VerificationLogger<DBConfig>* logger,
 static volatile uint16_t running_threads;
 static volatile uint8_t stopping;
 
-/**
- * jenncomment All activated threads run this function?
- *
- * @param task
- */
 void worker_proc(Task* task) {
   ::mica::util::lcore.pin_thread(static_cast<uint16_t>(task->thread_id));
 
@@ -134,8 +129,7 @@ void worker_proc(Task* task) {
   auto btree_idx = task->btree_idx;
 
   __sync_add_and_fetch(&running_threads, 1);
-  while (running_threads < task->num_threads)
-      ::mica::util::pause();
+  while (running_threads < task->num_threads) ::mica::util::pause();
 
   Timing t(ctx->timing_stack(), &::mica::transaction::Stats::worker);
 
@@ -340,7 +334,7 @@ void worker_proc(Task* task) {
                              for (uint64_t j = 0; j < kColumnSize; j += 64)
                                v += static_cast<uint64_t>(data[j]);
                              v += static_cast<uint64_t>(data[kColumnSize - 1]);
-                           })){
+                           })) {
               tx.abort();
               aborted = true;
               break;
@@ -398,13 +392,13 @@ int main(int argc, const char* argv[]) {
   Alloc alloc(config.get("alloc"));
   auto page_pool_size = 24 * uint64_t(1073741824);
   PagePool* page_pools[2];
-  // if (num_threads == 1) {
-  //   page_pools[0] = new PagePool(&alloc, page_pool_size, 0);
-  //   page_pools[1] = nullptr;
-  // } else {
-  page_pools[0] = new PagePool(&alloc, page_pool_size / 2, 0);
-  page_pools[1] = new PagePool(&alloc, page_pool_size / 2, 1);
-  // }
+  if (num_threads == 1) {
+    page_pools[0] = new PagePool(&alloc, page_pool_size, 0);
+    page_pools[1] = nullptr;
+  } else {
+    page_pools[0] = new PagePool(&alloc, page_pool_size / 2, 0);
+    page_pools[1] = new PagePool(&alloc, page_pool_size / 2, 1);
+  }
 
   ::mica::util::lcore.pin_thread(0);
 
@@ -447,19 +441,25 @@ int main(int argc, const char* argv[]) {
   (void)ret;
 
   auto tbl = db.get_table("main");
+  printf("jenndebug\n");
 
   db.activate(0);
+  printf("jenndebug2\n");
 
-  // jenncomment hash_idx is on a certain table
   HashIndex* hash_idx = nullptr;
   if (kUseHashIndex) {
+    printf("jenndebug3\n");
     bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+    printf("jenndebug4\n");
     assert(ret);
     (void)ret;
 
     hash_idx = db.get_hash_index_unique_u64("main_idx");
+    printf("jenndebug5\n");
     Transaction tx(db.context(0));
+    printf("jenndebug6\n");
     hash_idx->init(&tx);
+    printf("jenndebug7\n");
   }
 
   BTreeIndex* btree_idx = nullptr;
@@ -586,7 +586,6 @@ int main(int argc, const char* argv[]) {
     db.reset_backoff();
   }
 
-  // jenncomment generating workload
   std::vector<Task> tasks(num_threads);
   setup_logger(&logger, &tasks);
   {
@@ -774,7 +773,6 @@ int main(int argc, const char* argv[]) {
 
     worker_proc(&tasks[0]);
 
-    // jenncomment just joining and waiting for all the threads here
     while (threads.size() > 0) {
       threads.back().join();
       threads.pop_back();
