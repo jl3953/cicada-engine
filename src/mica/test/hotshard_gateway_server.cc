@@ -237,6 +237,9 @@ class ServerImpl final {
         db_ptr->activate(static_cast<uint16_t>(thread_id_));
         Transaction tx(db_ptr->context(static_cast<uint16_t>(thread_id_)));
 
+        printf("jenndebug pre timestamps %ld %d\n",
+               request_.hlctimestamp().walltime(),
+               request_.hlctimestamp().logicaltime());
         Timestamp assigned_ts = Timestamp::make(
             request_.hlctimestamp().logicaltime(),
             request_.hlctimestamp().walltime(),
