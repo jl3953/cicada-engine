@@ -237,14 +237,14 @@ class ServerImpl final {
         db_ptr->activate(static_cast<uint16_t>(thread_id_));
         Transaction tx(db_ptr->context(static_cast<uint16_t>(thread_id_)));
 
-        printf("jenndebug pre timestamps %ld %d\n",
-               request_.hlctimestamp().walltime(),
-               request_.hlctimestamp().logicaltime());
+//        printf("jenndebug pre timestamps %ld %d\n",
+//               request_.hlctimestamp().walltime(),
+//               request_.hlctimestamp().logicaltime());
         Timestamp assigned_ts = Timestamp::make(
             request_.hlctimestamp().logicaltime(),
             request_.hlctimestamp().walltime(),
             thread_id_);
-        printf("jenndebug timestamp %ld %ld\n", assigned_ts.t1, assigned_ts.t2);
+//        printf("jenndebug timestamp %ld %ld\n", assigned_ts.t1, assigned_ts.t2);
         if (!tx.begin(false, nullptr, &assigned_ts)) {
           const std::string& err_msg ="jenndebug tx.begin() failed";
           printf("%s\n", err_msg.c_str());
