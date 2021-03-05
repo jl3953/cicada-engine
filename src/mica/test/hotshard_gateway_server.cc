@@ -241,10 +241,10 @@ class ServerImpl final {
             static_cast<uint32_t>(request_.hlctimestamp().logicaltime()),
             static_cast<uint64_t>(request_.hlctimestamp().walltime()),
             static_cast<uint32_t>(thread_id_));
+        printf("jenndebug timestamp %ld %ld\n", assigned_ts.t1, assigned_ts.t2);
         if (!tx.begin(false, nullptr, &assigned_ts)) {
           const std::string& err_msg ="jenndebug tx.begin() failed";
           printf("%s\n", err_msg.c_str());
-          //reply_.set_is_committed(false);
           responder_.FinishWithError(
               Status(Status::CANCELLED.error_code(), err_msg),
               this);
