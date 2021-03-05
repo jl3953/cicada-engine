@@ -139,16 +139,9 @@ bool DB<StaticConfig>::create_btree_index_nonunique_u64(
   return true;
 }
 
-/**
- * I think this method "activates" a thread to start doing whatever
- * in the database.
- *
- * @tparam StaticConfig
- * @param thread_id
- */
 template <class StaticConfig>
 void DB<StaticConfig>::activate(uint16_t thread_id) {
-  // printf("DB::activate(): thread_id=%hu\n", thread_id);
+  printf("DB::activate(): thread_id=%hu\n", thread_id);
   if (thread_active_[thread_id]) return;
 
   if (!clock_init_[thread_id]) {
@@ -168,22 +161,30 @@ void DB<StaticConfig>::activate(uint16_t thread_id) {
   // auto init_gc_epoch = gc_epoch_;
 
   ::mica::util::memory_barrier();
+  printf("jenndebug act\n");
 
   // Keep updating timestamp until it is reflected to min_wts and min_rts.
   while (/*gc_epoch_ - init_gc_epoch < 2 ||*/ min_wts() >
              ctxs_[thread_id]->wts() ||
          min_rts() > ctxs_[thread_id]->rts()) {
+    printf("jenndebug act while\n");
     ::mica::util::pause();
 
+    printf("jenndebug act while2\n");
     quiescence(thread_id);
 
     // We also perform clock syncronization to bump up this thread's clock if
     // necessary.
+    printf("jenndebug act while3\n");
     ctxs_[thread_id]->synchronize_clock();
+    printf("jenndebug act while4\n");
     ctxs_[thread_id]->generate_timestamp();
+    printf("jenndebug act while5\n");
   }
+  printf("jenndebug act3\n");
 
   __sync_fetch_and_add(&active_thread_count_, 1);
+  printf("jenndebug act4\n");
 }
 
 template <class StaticConfig>
@@ -228,6 +229,7 @@ void DB<StaticConfig>::quiescence(uint16_t thread_id) {
   ::mica::util::memory_barrier();
 
   thread_states_[thread_id].quiescence = true;
+  //printf("jenndebug q\n");
 
   if (leader_thread_id_ == static_cast<uint16_t>(-1)) {
     if (__sync_bool_compare_and_swap(&leader_thread_id_,
@@ -255,12 +257,20 @@ void DB<StaticConfig>::quiescence(uint16_t thread_id) {
   bool first = true;
   Timestamp min_wts;
   Timestamp min_rts;
+  //printf("jenndebug q2\n");
 
   for (i = 0; i < num_threads_; i++) {
-    if (!thread_active_[i]) continue;
+    //printf("jenndebug qfor\n");
+    if (!thread_active_[i]) {
+        //printf("jenndebug qfor cont i %d\n", i);
+        continue;
+    }
+    //printf("jenndebug qfor2 i %d\n", i);
 
     auto wts = ctxs_[i]->wts();
+    //printf("jenndebug qfor3\n");
     auto rts = ctxs_[i]->rts();
+    //printf("jenndebug qfor4\n");
     if (first) {
       min_wts = wts;
       min_rts = rts;
@@ -271,7 +281,9 @@ void DB<StaticConfig>::quiescence(uint16_t thread_id) {
     }
 
     thread_states_[i].quiescence = false;
+    //printf("jenndebug qfor5\n");
   }
+  //printf("jenndebug q3\n");
 
   assert(!first);
   if (!first) {
@@ -292,6 +304,7 @@ void DB<StaticConfig>::quiescence(uint16_t thread_id) {
       // gc_epoch_++;
     }
   }
+  //printf("jenndebug q4\n");
 }
 
 template <class StaticConfig>

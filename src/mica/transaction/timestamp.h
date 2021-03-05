@@ -3,6 +3,9 @@
 #define MICA_TRANSACTION_TIMESTAMP_H_
 
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include "mica/common.h"
 #include "mica/util/barrier.h"
 
@@ -152,10 +155,12 @@ struct WideConcurrentTimestamp {
   volatile uint64_t t1;
   volatile uint64_t t2;
   volatile uint64_t version;
+  int random;
 
   WideTimestamp get() const {
     // Get a stable (not mutating) version of concurrent ts.
     WideTimestamp ts;
+    //fprintf(stderr, "jenndebug wide version %ld random %d\n", version, random);
     while (true) {
       uint64_t cts_version = version;
       if ((cts_version & 1) != 0) {
@@ -179,19 +184,27 @@ struct WideConcurrentTimestamp {
     t1 = b.t1;
     t2 = b.t2;
     version = 0;
+    //time_t t;
+    //srand((unsigned) time(&t));
+    //random = rand() % 1000;
+    //fprintf(stderr, "jenndebug init version %ld, random %d\n", version, random);
   }
 
   void write(const WideTimestamp& b) {
     // Initialize a concurrent ts (a) with b.  a may be being read by others.
+    // fprintf(stderr, "jenndebug version pre-write %ld, random %d\n", version, random);
     assert((version & 1) == 0);
     version++;
+    //fprintf(stderr, "jenndebug version++ write %ld random %d\n", version, random);
     ::mica::util::memory_barrier();
 
     t1 = b.t1;
     t2 = b.t2;
 
     ::mica::util::memory_barrier();
+    //fprintf(stderr, "jenndebug version pre-write2 %ld random %d\n", version, random);
     version++;
+    //fprintf(stderr, "jenndebug version++ write2 %ld random %d\n", version, random);
   }
 
   void update(const WideTimestamp& b) {
@@ -202,8 +215,10 @@ struct WideConcurrentTimestamp {
         cts_version &= ~uint64_t(1);
         uint64_t cts_new_version = cts_version + 1;
 
+        //fprintf(stderr, "jenndebug version pre-update0\n");
         uint64_t actual_cts_version =
             __sync_val_compare_and_swap(&version, cts_version, cts_new_version);
+        //fprintf(stderr, "jenndebug version swap update0\n");
         if (actual_cts_version == cts_version) break;
 
         ::mica::util::pause();
@@ -217,7 +232,9 @@ struct WideConcurrentTimestamp {
       }
 
       ::mica::util::memory_barrier();
+      //fprintf(stderr, "jenndebug version pre-update %ld random %d\n", version, random);
       version++;
+      //fprintf(stderr, "jenndebug version++ update %ld random %d\n", version, random);
     }
   }
 };
