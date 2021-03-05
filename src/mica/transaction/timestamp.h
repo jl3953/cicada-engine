@@ -98,8 +98,10 @@ struct WideTimestamp {
 
   static WideTimestamp make(uint32_t era, uint64_t tsc, uint32_t thread_id) {
     WideTimestamp ts;
-    ts.t1 = (static_cast<uint64_t>(era) << 32) | (tsc >> 32);
-    ts.t2 = (tsc << 32) | static_cast<uint64_t>(thread_id);
+//    ts.t1 = (static_cast<uint64_t>(era) << 32) | (tsc >> 32);
+//    ts.t2 = (tsc << 32) | static_cast<uint64_t>(thread_id);
+    ts.t1 = tsc;
+    ts.t2 = (static_cast<uint64_t>(era) << 32) | static_cast<uint64_t>(thread_id);
     return ts;
   }
 
