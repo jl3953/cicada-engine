@@ -147,8 +147,10 @@ struct WideTimestamp {
   }
 
   uint64_t clock_diff(const WideTimestamp& b) const {
-    uint64_t tsc = (t1 << 32) | (t2 >> 32);
-    uint64_t b_tsc = (b.t1 << 32) | (b.t2 >> 32);
+//    uint64_t tsc = (t1 << 32) | (t2 >> 32);
+//    uint64_t b_tsc = (b.t1 << 32) | (b.t2 >> 32);
+      uint64_t tsc = t1;
+      uint64_t b_tsc = b.t1;
     return tsc - b_tsc;
   }
 };
