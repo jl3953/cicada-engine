@@ -167,19 +167,19 @@ void DB<StaticConfig>::activate(uint16_t thread_id) {
   while (/*gc_epoch_ - init_gc_epoch < 2 ||*/ min_wts() >
              ctxs_[thread_id]->wts() ||
          min_rts() > ctxs_[thread_id]->rts()) {
-    printf("jenndebug act while\n");
+    //printf("jenndebug act while\n");
     ::mica::util::pause();
 
-    printf("jenndebug act while2\n");
+    //printf("jenndebug act while2\n");
     quiescence(thread_id);
 
     // We also perform clock syncronization to bump up this thread's clock if
     // necessary.
-    printf("jenndebug act while3\n");
+    //printf("jenndebug act while3\n");
     ctxs_[thread_id]->synchronize_clock();
-    printf("jenndebug act while4\n");
+    //printf("jenndebug act while4\n");
     ctxs_[thread_id]->generate_timestamp();
-    printf("jenndebug act while5\n");
+    //printf("jenndebug act while5\n");
   }
   //printf("jenndebug act3\n");
 

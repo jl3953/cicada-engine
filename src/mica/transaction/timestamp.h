@@ -158,8 +158,8 @@ struct WideTimestamp {
 struct WideConcurrentTimestamp {
   volatile uint64_t t1;
   volatile uint64_t t2;
-  volatile uint64_t version;
-  int random;
+  volatile uint64_t version = 0;
+  //int random;
 
   WideTimestamp get() const {
     // Get a stable (not mutating) version of concurrent ts.
