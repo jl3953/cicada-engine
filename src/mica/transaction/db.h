@@ -99,7 +99,7 @@ struct BasicDBConfig {
 
   // The maximum size of the read and write set.  Both sets share the same
   // array.
-  static constexpr uint16_t kMaxAccessSize = 1024;
+  static constexpr uint16_t kMaxAccessSize = 4096;
 
   // The maximum size of garbage collection queue.  This must be at least 2 *
   // kMaxAccessSize + 1.
