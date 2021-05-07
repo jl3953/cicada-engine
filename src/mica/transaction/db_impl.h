@@ -141,7 +141,7 @@ bool DB<StaticConfig>::create_btree_index_nonunique_u64(
 
 template <class StaticConfig>
 void DB<StaticConfig>::activate(uint16_t thread_id) {
-  printf("DB::activate(): thread_id=%hu\n", thread_id);
+  //printf("DB::activate(): thread_id=%hu\n", thread_id);
   if (thread_active_[thread_id]) return;
 
   if (!clock_init_[thread_id]) {
