@@ -368,7 +368,7 @@ void DB<StaticConfig>::update_backoff(uint16_t thread_id) {
   if (StaticConfig::kPrintBackoff &&
       now - last_backoff_print_ >= 100 * 1000 * us) {
     last_backoff_print_ = now;
-    printf("backoff=%.3f us\n", backoff_ / static_cast<double>(us));
+    printf("backoff=%f us\n", backoff_ / static_cast<double>(us));
   }
 }
 
