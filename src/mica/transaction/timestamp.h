@@ -158,7 +158,7 @@ struct WideTimestamp {
 struct WideConcurrentTimestamp {
   volatile uint64_t t1;
   volatile uint64_t t2;
-  volatile uint64_t version;
+  volatile uint64_t version = 0;
   int random;
 
   WideTimestamp get() const {
