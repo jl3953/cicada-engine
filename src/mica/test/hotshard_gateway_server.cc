@@ -464,36 +464,27 @@ int main(int argc, char** argv) {
     // DB db(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
 
 
-    printf("more jenndebug\n");
     const uint64_t data_sizes[] = {kDataSize};
     bool ret = db.create_table("main", 1, data_sizes);
     assert(ret);
     (void)ret;
 
-    fprintf(stderr, "more jenndebug\n");
     auto tbl = db.get_table("main");
-    fprintf(stderr, "jenndebug\n");
 
     db.activate(0);
-    printf("jenndebug2\n");
 
     // jenncomment hash_idx is on a certain table
 
     if (kUseHashIndex) {
-        printf("jenndebug3\n");
         bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
-        printf("jenndebug4\n");
         //bool ret = db.create_hash_index_nonunique_u64("main_idx", tbl, num_rows);
         assert(ret);
         (void)ret;
 
         hash_idx = db.get_hash_index_unique_u64("main_idx");
-        printf("jenndebug5\n");
         //hash_idx = db.get_hash_index_nonunique_u64("main_idx");
         Transaction tx(db.context(0));
-        printf("jenndebug6\n");
         hash_idx->init(&tx);
-        printf("jenndebug7\n");
     }
 
     {

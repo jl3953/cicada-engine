@@ -161,30 +161,22 @@ void DB<StaticConfig>::activate(uint16_t thread_id) {
   // auto init_gc_epoch = gc_epoch_;
 
   ::mica::util::memory_barrier();
-  printf("jenndebug act\n");
 
   // Keep updating timestamp until it is reflected to min_wts and min_rts.
   while (/*gc_epoch_ - init_gc_epoch < 2 ||*/ min_wts() >
              ctxs_[thread_id]->wts() ||
          min_rts() > ctxs_[thread_id]->rts()) {
-    printf("jenndebug act while\n");
     ::mica::util::pause();
 
-    printf("jenndebug act while2\n");
     quiescence(thread_id);
 
     // We also perform clock syncronization to bump up this thread's clock if
     // necessary.
-    printf("jenndebug act while3\n");
     ctxs_[thread_id]->synchronize_clock();
-    printf("jenndebug act while4\n");
     ctxs_[thread_id]->generate_timestamp();
-    printf("jenndebug act while5\n");
   }
-  printf("jenndebug act3\n");
 
   __sync_fetch_and_add(&active_thread_count_, 1);
-  printf("jenndebug act4\n");
 }
 
 template <class StaticConfig>
