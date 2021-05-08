@@ -118,7 +118,8 @@ bool Transaction<StaticConfig>::new_row(RAH& rah, Table<StaticConfig>* tbl,
   // assert(access_size_ < StaticConfig::kMaxAccessSize);
   // jenncomment not really a relevant check for jenn
   if (access_size_ >= StaticConfig::kMaxAccessSize) {
-    printf("too large access\n");
+    printf("too large access, access_size %d, kMaxAccessSize %d\n",
+           access_size_, StaticConfig::kMaxAccessSize);
     assert(false);
   }
   iset_idx_[iset_size_++] = access_size_;
@@ -262,7 +263,8 @@ bool Transaction<StaticConfig>::peek_row(RAH& rah, Table<StaticConfig>* tbl,
 
   // assert(access_size_ < StaticConfig::kMaxAccessSize);
   if (access_size_ >= StaticConfig::kMaxAccessSize) {
-    printf("too large access\n");
+    printf("too large access, access_size_ %d, kMaxAccessSize %d\n",
+           access_size_, StaticConfig::kMaxAccessSize);
     assert(false);
   }
   rah.access_item_ = &accesses_[access_size_];
