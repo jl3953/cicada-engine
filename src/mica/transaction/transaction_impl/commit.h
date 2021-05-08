@@ -492,6 +492,7 @@ bool Transaction<StaticConfig>::abort(bool skip_backoff) {
 
   if (StaticConfig::kBackoff && !skip_backoff) {
     t.switch_to(&Stats::backoff);
+    printf("jenndebug backing off\n");
     backoff();
   }
 
