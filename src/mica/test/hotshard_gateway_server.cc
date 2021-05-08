@@ -245,7 +245,7 @@ class ServerImpl final {
 
         if (!tx.begin(false, nullptr, &assigned_ts)) {
           const std::string& err_msg ="jenndebug tx.begin() failed";
-          printf("%s\n", err_msg.c_str());
+          //printf("%s\n", err_msg.c_str());
           reply_.set_is_committed(false);
           responder_.Finish(reply_, Status::OK, this);
 	  return;
@@ -268,7 +268,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               const std::string& err_msg = "jenndebug reads failed to peek/read row()";
-              printf("%s\n", err_msg.c_str());
+              //printf("%s\n", err_msg.c_str());
               reply_.set_is_committed(false);
               responder_.Finish(reply_, Status::OK, this);
               return;
@@ -300,7 +300,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               const char* err_msg = "jenndebug failed to peek/write rows";
-              printf("%s\n", err_msg);
+              //printf("%s\n", err_msg);
               reply_.set_is_committed(false);
               responder_.Finish(reply_, Status::OK, this);
 	      return;
@@ -314,7 +314,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               const std::string& err_msg ="jenndebug failed to allocate new_row()";
-              printf("%s\n", err_msg.c_str());
+              //printf("%s\n", err_msg.c_str());
               reply_.set_is_committed(false);
               responder_.Finish(reply_, Status::OK, this);
 	      return;
@@ -327,7 +327,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               const std::string& err_msg = "jenndebug failed to insert new row into hash_index";
-              printf("%s\n", err_msg.c_str());
+              //printf("%s\n", err_msg.c_str());
               responder_.Finish(reply_, Status::OK, this);
 	      return;
             }
@@ -340,7 +340,7 @@ class ServerImpl final {
           tx.abort();
           reply_.set_is_committed(false);
           const std::string& err_msg ="jenndebug failed to commit tx";
-          printf("%s\n", err_msg.c_str());
+          //printf("%s\n", err_msg.c_str());
           reply_.set_is_committed(false);
           responder_.Finish(reply_, Status::OK, this);
 	  return;
