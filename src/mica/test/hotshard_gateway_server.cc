@@ -490,6 +490,7 @@ int main(int argc, char** argv) {
           uint64_t floor = thread_id * partition;
           uint64_t ceiling = floor + partition;
           threads.emplace_back([&, thread_id, floor, ceiling] {
+            ::mica::util::lcore.pin_thread(thread_id);
 
             db.activate(static_cast<uint16_t>(thread_id));
             while (db.active_thread_count() < init_num_threads) {
@@ -515,8 +516,9 @@ int main(int argc, char** argv) {
                 auto row_id = rah.row_id();
                 hash_idx->insert(&tx, key, row_id);
               }
-              tx.commit();
-              printf("jenndebug key %lu\n", base + interval);
+              if (!tx.commit()) {
+                printf("failed to commit on keys %lu to %lu\n", base, base + interval);
+              }
             }
 
             db.deactivate(static_cast<uint16_t>(thread_id));
