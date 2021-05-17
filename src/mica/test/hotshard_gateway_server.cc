@@ -408,6 +408,7 @@ int main(int argc, char** argv) {
     uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 20000;
     //uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
     auto num_threads = static_cast<uint64_t>(atol(argv[1]));
+    auto threshold = static_cast<uint64_t>(atol(argv[2]));
 
     Alloc alloc(config.get("alloc"));
     auto page_pool_size = 24 * uint64_t(1073741824);
@@ -482,23 +483,27 @@ int main(int argc, char** argv) {
         printf("initializing table\n");
         uint64_t thread_id = 0;
         db.activate(static_cast<uint16_t>(thread_id));
-        Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
-        tx.begin();
-        for (uint64_t i = 0; i < 1000000; i++) {
-          uint64_t key = i;
-          uint64_t val = 1;
-          printf("jenndebug key %lu\n", key);
+        int interval = 4000;
+        for (uint64_t base = 0; base < threshold; base += interval) {
+          Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
+          tx.begin();
+          for (uint64_t i = base; i < interval; i++) {
+            uint64_t key = i;
+            uint64_t val = i;
+            printf("jenndebug key %lu\n", key);
 
-          // allocate new row
-          RowAccessHandle rah(&tx);
-          rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize);
+            // allocate new row
+            RowAccessHandle rah(&tx);
+            rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize);
 
-          // copy data into new row
-          memcpy(&rah.data()[0], &val, sizeof(val));
+            // copy data into new row
+            memcpy(&rah.data()[0], &val, sizeof(val));
 
-          // insert new row into index
-          auto row_id = rah.row_id();
-          hash_idx->insert(&tx, key, row_id);
+            // insert new row into index
+            auto row_id = rah.row_id();
+            hash_idx->insert(&tx, key, row_id);
+          }
+          tx.commit();
         }
 
         db.deactivate(thread_id);
