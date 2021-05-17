@@ -481,12 +481,13 @@ int main(int argc, char** argv) {
     {
         printf("initializing table\n");
         uint64_t thread_id = 0;
-        db.activate(thread_id);
+        db.activate(static_cast<uint16_t>(thread_id));
         Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
         tx.begin();
         for (uint64_t i = 0; i < 1000000; i++) {
           uint64_t key = i;
           uint64_t val = i;
+          printf("jenndebug key %lu\n", key);
 
           // allocate new row
           RowAccessHandle rah(&tx);
@@ -499,6 +500,8 @@ int main(int argc, char** argv) {
           auto row_id = rah.row_id();
           hash_idx->insert(&tx, key, row_id);
         }
+
+        db.deactivate(thread_id);
 
         std::vector<std::thread> threads;
         uint64_t init_num_threads = std::min(uint64_t(2), num_threads);
