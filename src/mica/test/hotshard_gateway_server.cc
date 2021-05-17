@@ -520,7 +520,7 @@ int main(int argc, char** argv) {
                 auto row_id = rah.row_id();
                 auto insert_ret = hash_idx->insert(&tx, key, row_id);
                 if (insert_ret != 1) {
-                  printf("failed to insert into index for key %lu, ret %lu\n",
+                  printf("failed to insert into index for key %lu, ret %d\n",
                          key, insert_ret);
                   continue;
                 }
