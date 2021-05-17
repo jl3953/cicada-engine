@@ -501,7 +501,6 @@ int main(int argc, char** argv) {
             for (uint64_t base = floor; base < ceiling; base += interval) {
               Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
               tx.begin();
-              bool commit = true;
               for (uint64_t i = 0; i < interval; i++) {
                 uint64_t key = base + i;
                 uint64_t val = base + i;
@@ -510,8 +509,7 @@ int main(int argc, char** argv) {
                 RowAccessHandle rah(&tx);
                 if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)){
                   printf("failed to allocate new row for key %lu\n", key);
-                  commit = false;
-                  break;
+                  continue;
                 }
 
                 // copy data into new row
@@ -521,14 +519,13 @@ int main(int argc, char** argv) {
                 auto row_id = rah.row_id();
                 if (hash_idx->insert(&tx, key, row_id) != 1) {
                   printf("failed to insert into index for key %lu\n", key);
-                  commit = false;
-                  break;
+                  continue;
                 }
 
               }
 
               Result result;
-              if (commit && !tx.commit(&result)) {
+              if (!tx.commit(&result)) {
                 printf("failed to commit on keys %lu to %lu, result %d\n",
                        base, base + interval, result);
               }
