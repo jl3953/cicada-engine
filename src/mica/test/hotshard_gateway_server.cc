@@ -487,9 +487,9 @@ int main(int argc, char** argv) {
         for (uint64_t base = 0; base < threshold; base += interval) {
           Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
           tx.begin();
-          for (uint64_t i = base; i < interval; i++) {
-            uint64_t key = i;
-            uint64_t val = i;
+          for (uint64_t i = 0; i < interval; i++) {
+            uint64_t key = base + i;
+            uint64_t val = base + i;
             printf("jenndebug key %lu\n", key);
 
             // allocate new row
