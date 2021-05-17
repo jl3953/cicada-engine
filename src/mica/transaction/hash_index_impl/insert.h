@@ -16,7 +16,7 @@ uint64_t HashIndex<StaticConfig, UniqueKey, Key, Hash, KeyEqual>::insert(
   if (!rah.peek_row(idx_tbl_, 0, bkt_id, true, true, false) ||
       !rah.read_row(data_copier_))
     return kHaveToAbort;
-  // printf("HashIndex::insert() 1\n");
+   printf("HashIndex::insert() 1\n");
   auto cbkt = reinterpret_cast<const Bucket*>(rah.cdata());
 
   // Find any duplicate key or the last bucket in the chain.
@@ -36,7 +36,7 @@ uint64_t HashIndex<StaticConfig, UniqueKey, Key, Hash, KeyEqual>::insert(
     if (!rah.peek_row(idx_tbl_, 0, bkt_id, true, true, false) ||
         !rah.read_row(data_copier_))
       return kHaveToAbort;
-    // printf("HashIndex::insert() 2\n");
+     printf("HashIndex::insert() 2\n");
     cbkt = reinterpret_cast<const Bucket*>(rah.cdata());
   }
 
@@ -44,7 +44,7 @@ uint64_t HashIndex<StaticConfig, UniqueKey, Key, Hash, KeyEqual>::insert(
   // write_row().  It may have better or worse insert speed, but it is totally
   // safe to do so.
   rah.write_row(kDataSize, data_copier_);
-  // printf("HashIndex::insert() 3\n");
+   printf("HashIndex::insert() 3\n");
   auto bkt = reinterpret_cast<Bucket*>(rah.data());
 
   uint64_t j;
@@ -56,7 +56,7 @@ uint64_t HashIndex<StaticConfig, UniqueKey, Key, Hash, KeyEqual>::insert(
     if (!new_rah.new_row(idx_tbl_, 0, Transaction::kNewRowID, true, kDataSize))
       return kHaveToAbort;
 
-    // printf("HashIndex::insert() 4\n");
+     printf("HashIndex::insert() 4\n");
 
     auto new_bkt = reinterpret_cast<Bucket*>(new_rah.data());
     for (j = 0; j < Bucket::kBucketSize; j++) new_bkt->values[j] = kNullRowID;
@@ -69,7 +69,7 @@ uint64_t HashIndex<StaticConfig, UniqueKey, Key, Hash, KeyEqual>::insert(
 
   bkt->keys[j] = key;
   bkt->values[j] = value;
-  // printf("HashIndex::insert() 5\n");
+   printf("HashIndex::insert() 5\n");
   return 1;
 }
 }
