@@ -485,60 +485,60 @@ int main(int argc, char** argv) {
         std::vector<std::thread> threads;
         uint64_t init_num_threads = std::min(uint64_t(2), num_threads);
 
-        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
-          uint64_t partition = threshold / init_num_threads + 1;
-          uint64_t floor = thread_id * partition;
-          uint64_t ceiling = floor + partition;
-          printf("thread id %lu, floor %lu, ceiling %lu\n", thread_id, floor, ceiling);
-          threads.emplace_back([&, thread_id, floor, ceiling] {
-            ::mica::util::lcore.pin_thread(thread_id);
-
-            db.activate(static_cast<uint16_t>(thread_id));
-            while (db.active_thread_count() < init_num_threads) {
-                  ::mica::util::pause();
-                  db.idle(static_cast<uint16_t>(thread_id));
-            }
-            unsigned long interval = 5;
-            for (uint64_t base = floor; base < ceiling; base += interval) {
-              Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
-              tx.begin();
-              for (uint64_t i = 0; i < interval; i++) {
-                uint64_t key = base + i;
-                uint64_t val = 1;
-
-                // allocate new row
-                RowAccessHandle rah(&tx);
-                if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)){
-                  printf("failed to allocate new row for key %lu\n", key);
-                  continue;
-                }
-
-                // copy data into new row
-                memcpy(&rah.data()[0], &val, sizeof(val));
-
-                // insert new row into index
-                auto row_id = rah.row_id();
-                auto insert_ret = hash_idx->insert(&tx, key, row_id);
-                if (insert_ret != 1) {
-                  printf("failed to insert into index for key %lu, ret %d\n",
-                         key, insert_ret);
-                  continue;
-                }
-
-              }
-
-              Result result;
-              if (!tx.commit(&result)) {
-                printf("failed to commit on keys %lu to %lu, result %d\n",
-                       base, base + interval, result);
-              }
-            }
-            db.deactivate(static_cast<uint16_t>(thread_id));
-            return 0;
-
-          });
-
-        }
+//        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
+//          uint64_t partition = threshold / init_num_threads + 1;
+//          uint64_t floor = thread_id * partition;
+//          uint64_t ceiling = floor + partition;
+//          printf("thread id %lu, floor %lu, ceiling %lu\n", thread_id, floor, ceiling);
+//          threads.emplace_back([&, thread_id, floor, ceiling] {
+//            ::mica::util::lcore.pin_thread(thread_id);
+//
+//            db.activate(static_cast<uint16_t>(thread_id));
+//            while (db.active_thread_count() < init_num_threads) {
+//                  ::mica::util::pause();
+//                  db.idle(static_cast<uint16_t>(thread_id));
+//            }
+//            unsigned long interval = 5;
+//            for (uint64_t base = floor; base < ceiling; base += interval) {
+//              Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
+//              tx.begin();
+//              for (uint64_t i = 0; i < interval; i++) {
+//                uint64_t key = base + i;
+//                uint64_t val = 1;
+//
+//                // allocate new row
+//                RowAccessHandle rah(&tx);
+//                if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)){
+//                  printf("failed to allocate new row for key %lu\n", key);
+//                  continue;
+//                }
+//
+//                // copy data into new row
+//                memcpy(&rah.data()[0], &val, sizeof(val));
+//
+//                // insert new row into index
+//                auto row_id = rah.row_id();
+//                auto insert_ret = hash_idx->insert(&tx, key, row_id);
+//                if (insert_ret != 1) {
+//                  printf("failed to insert into index for key %lu, ret %d\n",
+//                         key, insert_ret);
+//                  continue;
+//                }
+//
+//              }
+//
+//              Result result;
+//              if (!tx.commit(&result)) {
+//                printf("failed to commit on keys %lu to %lu, result %d\n",
+//                       base, base + interval, result);
+//              }
+//            }
+//            db.deactivate(static_cast<uint16_t>(thread_id));
+//            return 0;
+//
+//          });
+//
+//        }
 
 
 //        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
