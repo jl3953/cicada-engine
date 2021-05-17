@@ -408,7 +408,7 @@ int main(int argc, char** argv) {
     uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 20000;
     //uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
     auto num_threads = static_cast<uint64_t>(atol(argv[1]));
-    auto threshold = static_cast<uint64_t>(atol(argv[2]));
+    //auto threshold = static_cast<uint64_t>(atol(argv[2]));
 
     Alloc alloc(config.get("alloc"));
     auto page_pool_size = 24 * uint64_t(1073741824);
