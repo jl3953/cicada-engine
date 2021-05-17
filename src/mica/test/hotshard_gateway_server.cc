@@ -494,93 +494,93 @@ int main(int argc, char** argv) {
                 }
 
                 // Randomize the data layout by shuffling row insert order.
-                std::mt19937 g(thread_id);
-                std::vector<uint64_t> row_ids;
-                row_ids.reserve((num_rows + init_num_threads - 1) / init_num_threads);
-                for (uint64_t i = thread_id; i < num_rows; i += init_num_threads)
-                    row_ids.push_back(i);
-                std::shuffle(row_ids.begin(), row_ids.end(), g);
+//                std::mt19937 g(thread_id);
+//                std::vector<uint64_t> row_ids;
+//                row_ids.reserve((num_rows + init_num_threads - 1) / init_num_threads);
+//                for (uint64_t i = thread_id; i < num_rows; i += init_num_threads)
+//                    row_ids.push_back(i);
+//                std::shuffle(row_ids.begin(), row_ids.end(), g);
 
                 /** jennsection **/
-                std::vector<uint64_t> keys;
-                std::vector<uint64_t> values;
+//                std::vector<uint64_t> keys;
+//                std::vector<uint64_t> values;
                 /** end jennsection **/
 
-                Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
-                const uint64_t kBatchSize = 16;
-                for (uint64_t i = 0; i < row_ids.size(); i += kBatchSize) {
-                    while (true) {
-                        bool ret = tx.begin();
-                        if (!ret) {
-                            printf("failed to start a transaction\n");
-                            continue;
-                        }
+//                Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
+//                const uint64_t kBatchSize = 16;
+//                for (uint64_t i = 0; i < row_ids.size(); i += kBatchSize) {
+//                    while (true) {
+//                        bool ret = tx.begin();
+//                        if (!ret) {
+//                            printf("failed to start a transaction\n");
+//                            continue;
+//                        }
+//
+//                        bool aborted = false;
+//                        auto i_end = std::min(i + kBatchSize, row_ids.size());
+//                        for (uint64_t j = i; j < i_end; j++) {
+//                            RowAccessHandle rah(&tx);
+//                            if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
+//                                             kDataSize)) {
+//                                printf("failed to insert rows at new_row(), row = %" PRIu64
+//                                       "\n",
+//                                       j);
+//                                aborted = true;
+//                                tx.abort();
+//                                break;
+//                            }
 
-                        bool aborted = false;
-                        auto i_end = std::min(i + kBatchSize, row_ids.size());
-                        for (uint64_t j = i; j < i_end; j++) {
-                            RowAccessHandle rah(&tx);
-                            if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
-                                             kDataSize)) {
-                                printf("failed to insert rows at new_row(), row = %" PRIu64
-                                       "\n",
-                                       j);
-                                aborted = true;
-                                tx.abort();
-                                break;
-                            }
+//                            if (kUseHashIndex) {
+//                                auto row_id_jenn = row_ids[j];
+//                                auto value_jenn = rah.row_id();
+//                                keys.push_back(row_id_jenn); // jennsection
+//                                values.push_back(value_jenn); // jennsection
+//                                auto ret = hash_idx->insert(&tx, row_id_jenn, value_jenn);
+//                                if (ret != 1 || ret == HashIndex::kHaveToAbort) {
+//                                    printf("failed to update index row = %" PRIu64 "\n", j);
+//                                    aborted = true;
+//                                    tx.abort();
+//                                    break;
+//                                } else {
+//                                    printf("jenndebug inserted (%lu, %lu)\n", row_id_jenn, value_jenn);
+//                                }
+//                            }
+//
+//                        }
 
-                            if (kUseHashIndex) {
-                                auto row_id_jenn = row_ids[j];
-                                auto value_jenn = rah.row_id();
-                                keys.push_back(row_id_jenn); // jennsection
-                                values.push_back(value_jenn); // jennsection
-                                auto ret = hash_idx->insert(&tx, row_id_jenn, value_jenn);
-                                if (ret != 1 || ret == HashIndex::kHaveToAbort) {
-                                    printf("failed to update index row = %" PRIu64 "\n", j);
-                                    aborted = true;
-                                    tx.abort();
-                                    break;
-                                } else {
-                                    printf("jenndebug inserted (%lu, %lu)\n", row_id_jenn, value_jenn);
-                                }
-                            }
-
-                        }
-
-                        if (aborted) continue;
-
-                        Result result;
-                        if (!tx.commit(&result)) {
-                            printf("failed to insert rows at commit(), row = %" PRIu64
-                                   "; result=%d\n",
-                                   i_end - 1, static_cast<int>(result));
-                            continue;
-                        }
-                        break;
-                    }
-
-                    /** jennsection **/
-                    //tx.begin();
-
-                    //uint64_t value = 0;
-                    //for (const auto& key : keys) {
-                    //    auto lookup_result =
-                    //            hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
-                    //                             [&value](auto& k, auto& v) {
-                    //                                 (void)k;
-                    //                                 value = v;
-                    //                                 return true;
-                    //                             });
-                    //    printf("jenndebug found %lu, (%lu, %lu)\n", lookup_result, key, value);
-                    //}
-                    //Result result;
-                    //tx.commit(&result);
-                    /** end jennsection **/
-                    printf("jenndebug allright\n");
-
-                }
-
+//                        if (aborted) continue;
+//
+//                        Result result;
+//                        if (!tx.commit(&result)) {
+//                            printf("failed to insert rows at commit(), row = %" PRIu64
+//                                   "; result=%d\n",
+//                                   i_end - 1, static_cast<int>(result));
+//                            continue;
+//                        }
+//                        break;
+//                    }
+//
+//                    /** jennsection **/
+//                    //tx.begin();
+//
+//                    //uint64_t value = 0;
+//                    //for (const auto& key : keys) {
+//                    //    auto lookup_result =
+//                    //            hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
+//                    //                             [&value](auto& k, auto& v) {
+//                    //                                 (void)k;
+//                    //                                 value = v;
+//                    //                                 return true;
+//                    //                             });
+//                    //    printf("jenndebug found %lu, (%lu, %lu)\n", lookup_result, key, value);
+//                    //}
+//                    //Result result;
+//                    //tx.commit(&result);
+//                    /** end jennsection **/
+//                    printf("jenndebug allright\n");
+//
+//                }
+//
                 db.deactivate(static_cast<uint16_t>(thread_id));
                 return 0;
             });
