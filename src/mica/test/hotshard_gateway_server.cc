@@ -499,7 +499,7 @@ int main(int argc, char** argv) {
                   db.idle(static_cast<uint16_t>(thread_id));
             }
             unsigned long interval = 5;
-            for (uint64_t base = floor; base < ceiling; base += interval) {
+            for (uint64_t base = floor; base < 125000; base += interval) {
               Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
               tx.begin();
               for (uint64_t i = 0; i < interval; i++) {
@@ -534,6 +534,40 @@ int main(int argc, char** argv) {
               }
             }
 
+            for (uint64_t base = 125000; base < 250000; base += interval) {
+              Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
+              tx.begin();
+              for (uint64_t i = 0; i < interval; i++) {
+                uint64_t key = base + i;
+                uint64_t val = base + i;
+
+                // allocate new row
+                RowAccessHandle rah(&tx);
+                if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)){
+                  printf("failed to allocate new row for key %lu\n", key);
+                  continue;
+                }
+
+                // copy data into new row
+                memcpy(&rah.data()[0], &val, sizeof(val));
+
+                // insert new row into index
+                auto row_id = rah.row_id();
+                auto insert_ret = hash_idx->insert(&tx, key, row_id);
+                if (insert_ret != 1) {
+                  printf("failed to insert into index for key %lu, ret %d\n",
+                         key, insert_ret);
+                  continue;
+                }
+
+              }
+
+              Result result;
+              if (!tx.commit(&result)) {
+                printf("failed to commit on keys %lu to %lu, result %d\n",
+                       base, base + interval, result);
+              }
+            }
             db.deactivate(static_cast<uint16_t>(thread_id));
             return 0;
 
