@@ -489,6 +489,7 @@ int main(int argc, char** argv) {
           uint64_t partition = threshold / init_num_threads + 1;
           uint64_t floor = thread_id * partition;
           uint64_t ceiling = floor + partition;
+          printf("thread id %lu, floor %lu, ceiling %lu\n", thread_id, floor, ceiling);
           threads.emplace_back([&, thread_id, floor, ceiling] {
             ::mica::util::lcore.pin_thread(thread_id);
 
