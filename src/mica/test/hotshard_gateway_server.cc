@@ -518,8 +518,8 @@ int main(int argc, char** argv) {
 
                 // insert new row into index
                 auto row_id = rah.row_id();
-                if (hash_idx->insert(&tx, key, row_id) != 1) {
-                  printf("failed to insert into index for key %lu\n", key);
+                if ((ret = hash_idx->insert(&tx, key, row_id)) != 1) {
+                  printf("failed to insert into index for key %lu, ret %lu\n", key, ret);
                   continue;
                 }
 
