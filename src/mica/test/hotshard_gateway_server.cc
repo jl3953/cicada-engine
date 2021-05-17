@@ -481,35 +481,52 @@ int main(int argc, char** argv) {
 
     {
         printf("initializing table\n");
-        uint64_t thread_id = 0;
-        db.activate(static_cast<uint16_t>(thread_id));
-        int interval = 5;
-        for (uint64_t base = 0; base < threshold; base += interval) {
-          Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
-          tx.begin();
-          for (uint64_t i = 0; i < interval; i++) {
-            uint64_t key = base + i;
-            uint64_t val = base + i;
-
-            // allocate new row
-            RowAccessHandle rah(&tx);
-            rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize);
-
-            // copy data into new row
-            memcpy(&rah.data()[0], &val, sizeof(val));
-
-            // insert new row into index
-            auto row_id = rah.row_id();
-            hash_idx->insert(&tx, key, row_id);
-          }
-          tx.commit();
-          //printf("jenndebug key %lu\n", base + interval);
-        }
-
-      db.deactivate(thread_id);
 
         std::vector<std::thread> threads;
         uint64_t init_num_threads = std::min(uint64_t(2), num_threads);
+
+        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
+          uint64_t partition = threshold / init_num_threads + 1;
+          uint64_t floor = thread_id * partition;
+          uint64_t ceiling = floor + partition;
+          threads.emplace_back([&, thread_id, floor, ceiling] {
+
+            db.activate(static_cast<uint16_t>(thread_id));
+            while (db.active_thread_count() < init_num_threads) {
+                  ::mica::util::pause();
+                  db.idle(static_cast<uint16_t>(thread_id));
+            }
+            unsigned long interval = 5;
+            for (uint64_t base = floor; base < ceiling; base += interval) {
+              Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
+              tx.begin();
+              for (uint64_t i = 0; i < interval; i++) {
+                uint64_t key = base + i;
+                uint64_t val = base + i;
+
+                // allocate new row
+                RowAccessHandle rah(&tx);
+                rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize);
+
+                // copy data into new row
+                memcpy(&rah.data()[0], &val, sizeof(val));
+
+                // insert new row into index
+                auto row_id = rah.row_id();
+                hash_idx->insert(&tx, key, row_id);
+              }
+              tx.commit();
+              //printf("jenndebug key %lu\n", base + interval);
+            }
+
+            db.deactivate(static_cast<uint16_t>(thread_id));
+            return 0;
+
+          });
+
+        }
+
+
 //        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
 //            threads.emplace_back([&, thread_id] {
 //                ::mica::util::lcore.pin_thread(thread_id);
