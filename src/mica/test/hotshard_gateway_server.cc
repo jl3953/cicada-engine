@@ -516,7 +516,7 @@ int main(int argc, char** argv) {
                 hash_idx->insert(&tx, key, row_id);
               }
               tx.commit();
-              //printf("jenndebug key %lu\n", base + interval);
+              printf("jenndebug key %lu\n", base + interval);
             }
 
             db.deactivate(static_cast<uint16_t>(thread_id));
