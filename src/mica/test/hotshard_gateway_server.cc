@@ -519,15 +519,18 @@ int main(int argc, char** argv) {
 
                 // insert new row into index
                 auto row_id = rah.row_id();
-                if (!hash_idx->insert(&tx, key, row_id)) {
+                if (hash_idx->insert(&tx, key, row_id) != 1) {
                   printf("failed to insert into index for key %lu\n", key);
                   commit = false;
                   break;
                 }
 
               }
-              if (commit && !tx.commit()) {
-                printf("failed to commit on keys %lu to %lu\n", base, base + interval);
+
+              Result result;
+              if (commit && !tx.commit(&result)) {
+                printf("failed to commit on keys %lu to %lu, result %d\n",
+                       base, base + interval, result);
               }
             }
 
