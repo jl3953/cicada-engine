@@ -285,7 +285,6 @@ class ServerImpl final {
         for (int i = 0; i < request_.write_keyset_size(); i++) {
           uint64_t key = request_.write_keyset(i).key();
           uint64_t val = request_.write_keyset(i).value();
-          //printf("jenndebug key %lu, val %lu\n", key, val);
 
           RowAccessHandle rah(&tx);
           auto row_id = static_cast<uint64_t>(-1);
@@ -349,6 +348,7 @@ class ServerImpl final {
 
         reply_.set_is_committed(true);
         responder_.Finish(reply_, Status::OK, this);
+        printf("jenndebug key %lu, val %lu\n", key, val);
 
       } else {
         new CallData(service_, cq_, thread_id_);
