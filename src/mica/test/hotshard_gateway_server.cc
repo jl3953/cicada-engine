@@ -486,7 +486,7 @@ int main(int argc, char** argv) {
         tx.begin();
         for (uint64_t i = 0; i < 1000000; i++) {
           uint64_t key = i;
-          uint64_t val = i;
+          uint64_t val = 1;
           printf("jenndebug key %lu\n", key);
 
           // allocate new row
