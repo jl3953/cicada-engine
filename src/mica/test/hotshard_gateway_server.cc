@@ -306,6 +306,7 @@ class ServerImpl final {
 	      return;
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
+            printf("jenndebug value exists already\n");
           } else {
             // value does not exist yet. Create row and insert into index.
 
@@ -332,6 +333,7 @@ class ServerImpl final {
 	      return;
             }
           }
+          printf("jenndebug key %lu, val %lu\n", key, val);
         }
 
         // commit
@@ -348,7 +350,6 @@ class ServerImpl final {
 
         reply_.set_is_committed(true);
         responder_.Finish(reply_, Status::OK, this);
-        printf("jenndebug key %lu, val %lu\n", key, val);
 
       } else {
         new CallData(service_, cq_, thread_id_);
