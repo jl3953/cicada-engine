@@ -503,7 +503,7 @@ int main(int argc, char** argv) {
               Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
               tx.begin();
               for (uint64_t i = 0; i < interval; i++) {
-                uint64_t key = 1;
+                uint64_t key = base + i;
                 uint64_t val = 1;
 
                 // allocate new row
