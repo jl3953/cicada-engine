@@ -245,7 +245,7 @@ class ServerImpl final {
 
         if (!tx.begin(false, nullptr, &assigned_ts)) {
           const std::string& err_msg ="jenndebug tx.begin() failed";
-          //printf("%s\n", err_msg.c_str());
+          printf("%s\n", err_msg.c_str());
           reply_.set_is_committed(false);
           responder_.Finish(reply_, Status::OK, this);
 	  return;
@@ -268,7 +268,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               const std::string& err_msg = "jenndebug reads failed to peek/read row()";
-              //printf("%s\n", err_msg.c_str());
+              printf("%s\n", err_msg.c_str());
               reply_.set_is_committed(false);
               responder_.Finish(reply_, Status::OK, this);
               return;
@@ -285,7 +285,7 @@ class ServerImpl final {
         for (int i = 0; i < request_.write_keyset_size(); i++) {
           uint64_t key = request_.write_keyset(i).key();
           uint64_t val = request_.write_keyset(i).value();
-          printf("jenndebug key %lu, val %lu\n", key, val);
+          //printf("jenndebug key %lu, val %lu\n", key, val);
 
           RowAccessHandle rah(&tx);
           auto row_id = static_cast<uint64_t>(-1);
@@ -301,7 +301,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               const char* err_msg = "jenndebug failed to peek/write rows";
-              //printf("%s\n", err_msg);
+              printf("%s\n", err_msg);
               reply_.set_is_committed(false);
               responder_.Finish(reply_, Status::OK, this);
 	      return;
@@ -315,7 +315,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               const std::string& err_msg ="jenndebug failed to allocate new_row()";
-              //printf("%s\n", err_msg.c_str());
+              printf("%s\n", err_msg.c_str());
               reply_.set_is_committed(false);
               responder_.Finish(reply_, Status::OK, this);
 	      return;
@@ -328,7 +328,7 @@ class ServerImpl final {
               tx.abort();
               reply_.set_is_committed(false);
               const std::string& err_msg = "jenndebug failed to insert new row into hash_index";
-              //printf("%s\n", err_msg.c_str());
+              printf("%s\n", err_msg.c_str());
               responder_.Finish(reply_, Status::OK, this);
 	      return;
             }
@@ -341,7 +341,7 @@ class ServerImpl final {
           tx.abort();
           reply_.set_is_committed(false);
           const std::string& err_msg ="jenndebug failed to commit tx";
-          //printf("%s\n", err_msg.c_str());
+          printf("%s\n", err_msg.c_str());
           reply_.set_is_committed(false);
           responder_.Finish(reply_, Status::OK, this);
 	  return;
