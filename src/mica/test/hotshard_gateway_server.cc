@@ -483,7 +483,7 @@ int main(int argc, char** argv) {
         printf("initializing table\n");
         uint64_t thread_id = 0;
         db.activate(static_cast<uint16_t>(thread_id));
-        int interval = 4000;
+        int interval = 1000;
         for (uint64_t base = 0; base < threshold; base += interval) {
           Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
           tx.begin();
