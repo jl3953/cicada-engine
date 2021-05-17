@@ -490,7 +490,6 @@ int main(int argc, char** argv) {
           for (uint64_t i = 0; i < interval; i++) {
             uint64_t key = base + i;
             uint64_t val = base + i;
-            printf("jenndebug key %lu\n", key);
 
             // allocate new row
             RowAccessHandle rah(&tx);
@@ -504,9 +503,10 @@ int main(int argc, char** argv) {
             hash_idx->insert(&tx, key, row_id);
           }
           tx.commit();
+          //printf("jenndebug key %lu\n", base + interval);
         }
 
-        db.deactivate(thread_id);
+      db.deactivate(thread_id);
 
         std::vector<std::thread> threads;
         uint64_t init_num_threads = std::min(uint64_t(2), num_threads);
