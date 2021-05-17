@@ -501,22 +501,32 @@ int main(int argc, char** argv) {
             for (uint64_t base = floor; base < ceiling; base += interval) {
               Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
               tx.begin();
+              bool commit = true;
               for (uint64_t i = 0; i < interval; i++) {
                 uint64_t key = base + i;
                 uint64_t val = base + i;
 
                 // allocate new row
                 RowAccessHandle rah(&tx);
-                rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize);
+                if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)){
+                  printf("failed to allocate new row for key %lu\n", key);
+                  commit = false;
+                  break;
+                }
 
                 // copy data into new row
                 memcpy(&rah.data()[0], &val, sizeof(val));
 
                 // insert new row into index
                 auto row_id = rah.row_id();
-                hash_idx->insert(&tx, key, row_id);
+                if (!hash_idx->insert(&tx, key, row_id)) {
+                  printf("failed to insert into index for key %lu\n", key);
+                  commit = false;
+                  break;
+                }
+
               }
-              if (!tx.commit()) {
+              if (commit && !tx.commit()) {
                 printf("failed to commit on keys %lu to %lu\n", base, base + interval);
               }
             }
