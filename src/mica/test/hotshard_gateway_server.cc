@@ -533,7 +533,9 @@ int main(int argc, char** argv) {
                        base, base + interval, result);
               }
             }
+            db.deactivate(thread_id);
 
+            db.activate(thread_id);
             for (uint64_t base = 125000; base < 250000; base += interval) {
               Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
               tx.begin();
