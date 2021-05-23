@@ -9,6 +9,7 @@ namespace mica {
 namespace transaction {
 template <class StaticConfig>
 bool Transaction<StaticConfig>::begin(bool peek_only,
+                                      const Timestamp* ts,
                                       const Timestamp* causally_after_ts) {
   Timing t(ctx_->timing_stack(), &Stats::timestamping);
 
@@ -36,6 +37,9 @@ bool Transaction<StaticConfig>::begin(bool peek_only,
 
   while (true) {
     ts_ = ctx_->generate_timestamp(peek_only);
+    if (ts != nullptr) {
+      ts_ = *ts;
+    }
 
     // TODO: We should bump the clock instead of waiting for a high timestamp.
     if (causally_after_ts != nullptr) {
@@ -230,49 +234,7 @@ bool Transaction<StaticConfig>::commit(Result* detail,
 
   if (StaticConfig::kVerbose) printf("try_to_commit: ts=%" PRIu64 "\n", ts_.t2);
 
-  if (false) {
-    // Try to amend the timestamp to meet the read timestamp requirement for the write est.
-    Timestamp max_write_rts = ts_;
 
-    for (auto i = 0; i < access_size_; i++) {
-      auto item = &accesses_[i];
-
-      if (item->state == RowAccessState::kInvalid ||
-          item->state == RowAccessState::kNew ||
-          item->state == RowAccessState::kPeek)
-        continue;
-
-      if (item->state == RowAccessState::kWrite ||
-          item->state == RowAccessState::kReadWrite ||
-          item->state == RowAccessState::kReadDelete) {
-        auto rv = item->read_rv;
-        auto rts = rv->rts.get();
-        if (max_write_rts < rts) max_write_rts = rts;
-      }
-    }
-
-    if (ts_ != max_write_rts) {
-      // printf("ts=%" PRIu64 " max_write_rts=%" PRIu64 "\n", ts_.t2,
-      //        max_write_rts.t2);
-      // XXX: Hack to increment the timestamp and clock.
-      auto c = (max_write_rts.t2 >> 8) + 1;
-      ts_.t2 = (c << 8) | (ts_.t2 & 0xff);
-      // printf("old clock=%" PRIu64 "\n", ctx_->adjusted_clock_);
-      ctx_->adjusted_clock_ += c - ((ctx_->adjusted_clock_ << 8) >> 8);
-      // printf("new clock=%" PRIu64 "\n", ctx_->adjusted_clock_);
-
-      for (auto i = 0; i < access_size_; i++) {
-        auto item = &accesses_[i];
-        if (item->write_rv != nullptr) {
-          item->write_rv->wts = ts_;
-          item->write_rv->rts.write(ts_);
-        }
-
-        // Allow refinding the newer versions using the new timestamp.
-        item->newer_rv = item->head;
-      }
-    }
-  }
 
   if (consecutive_commits_ < 5) {
     if (StaticConfig::kSortWriteSetByContention) {

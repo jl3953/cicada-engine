@@ -55,7 +55,9 @@ struct BasicDBConfig {
   static constexpr bool kPromoteNonInlinedVersion = true;
 
   // The maximum single increment of a clock (cycles).
-  static constexpr int64_t kMaxClockIncrement = 10000000000000UL;  // ~1 hour
+  //static constexpr int64_t kMaxClockIncrement = 10000000000000UL;  // ~1 hour
+  static constexpr int64_t kMaxClockIncrement = 360000000000UL; // 1 hour
+  // The max single increment of a clock (ns)
 
   // Backoff when the transaction has been aborted.  Requires
   // kCollectCommitStats == true.

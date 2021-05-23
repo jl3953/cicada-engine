@@ -8,7 +8,7 @@
 namespace mica {
 namespace util {
 void Stopwatch::init_start() {
-  init_t_ = now();
+//  init_t_ = now();
   gettimeofday(&init_tv_, nullptr);
 }
 
@@ -25,11 +25,16 @@ void Stopwatch::init_end() {
         static_cast<uint64_t>(tv.tv_usec - init_tv_.tv_usec);
 
     if (diff >= min_time) {
-      uint64_t t = now();
-      c_1_sec_ = (t - init_t_) * min_time * 10 / diff;
-      c_1_msec_ = c_1_sec_ / 1000;
-      c_1_usec_ = c_1_msec_ / 1000;
-      c_1_nsec_ = c_1_usec_ / 1000;
+//      uint64_t t = now();
+//      c_1_sec_ = (t - init_t_) * min_time * 10 / diff;
+//      c_1_msec_ = c_1_sec_ / 1000;
+//      c_1_usec_ = c_1_msec_ / 1000;
+//      c_1_nsec_ = c_1_usec_ / 1000;
+      c_1_nsec_ = 1;
+      c_1_usec_ = c_1_nsec_ * 1000;
+      c_1_msec_ = c_1_usec_ * 1000;
+      c_1_sec_ = c_1_msec_ * 1000;
+
       break;
     }
 

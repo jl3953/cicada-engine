@@ -159,6 +159,10 @@ bool Transaction<StaticConfig>::peek_row(RAH& rah, Table<StaticConfig>* tbl,
   assert(began_);
   if (rah) return false;
 
+  if (row_id >= tbl->row_count()) {
+    printf("jenndebug row_id %lu, tbl->row_count() %lu\n",
+           row_id, tbl->row_count());
+  }
   assert(row_id < tbl->row_count());
 
   Timing t(ctx_->timing_stack(), &Stats::execution_read);

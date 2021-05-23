@@ -111,7 +111,7 @@ class ServerImpl final {
             static_cast<uint64_t>(request_.hlctimestamp().walltime()),
             static_cast<uint32_t>(thread_id_));
 
-        if (!tx.begin(false, nullptr//, &assigned_ts
+        if (!tx.begin(false, &assigned_ts, nullptr//, &assigned_ts
         )) {
           const std::string& err_msg ="jenndebug tx.begin() failed";
           printf("%s\n", err_msg.c_str());
@@ -127,8 +127,8 @@ class ServerImpl final {
                                [&row_id](auto& k, auto& v) {
                                  (void)k;
                                  row_id = v;
-                                 return true; /* jenndebug is this correct? */
-                               }) > 0) {
+                                 return false; /* jenndebug is this correct? */
+                               }) == 1) {
             // value being read is found
             RowAccessHandle rah(&tx);
             if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
@@ -160,8 +160,8 @@ class ServerImpl final {
           if (hash_idx_->lookup(&tx, key, true, [&row_id](auto& k, auto& v) {
             (void)k;
             row_id = v;
-            return true;
-          }) > 0) {
+            return false;
+          }) == 1) {
             // value already exists, just update it
             if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
                 !rah.write_row()) {
