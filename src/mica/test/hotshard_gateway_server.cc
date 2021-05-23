@@ -36,8 +36,10 @@
 #include "../build/smdbrpc.grpc.pb.h"
 
 using grpc::Server;
+using grpc::ServerAsyncResponseWriter;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
+using grpc::ServerCompletionQueue;
 using grpc::Status;
 using smdbrpc::HotshardRequest;
 using smdbrpc::HotshardReply;
@@ -69,114 +71,114 @@ DB* db_ptr = nullptr;
 
 
 // Logic and data behind the server's behavior.
-class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
-  Status ContactHotshard(ServerContext* context, const HotshardRequest* request,
-                  HotshardReply* reply) override {
-
-      auto tbl = db_ptr->get_table("main");
-
-      ::mica::util::lcore.pin_thread(0);
-
-      db_ptr->activate(static_cast<uint16_t>(0));
-      Transaction tx(db_ptr->context(0));
-
-      //RowAccessHandle rah(&tx);
-      Timestamp assigned_ts = Timestamp::make(
-          0, static_cast<uint64_t>(request->hlctimestamp().walltime()), 0);
-      // bool began_successfully = tx.begin(false, nullptr, &assigned_ts);
-      if (!tx.begin(false, nullptr, &assigned_ts)) {
-          printf("jenndebug tx.begin() failed.\n");
-          reply->set_is_committed(false);
-          return Status::CANCELLED;
-      }
-
-      // reads
-      for (uint64_t key : request->read_keyset()) {
-
-        auto row_id = static_cast<uint64_t>(-1);
-        if (hash_idx->lookup(&tx, key, true /*skip_validation*/,
-                             [&row_id](auto &k, auto& v){
-                               (void) k;
-                               row_id = v;
-                               return true; /* jenndebug is this correct? */
-                             }) > 0) {
-          // value being read is found
-          RowAccessHandle rah(&tx);
-          if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
-              !rah.read_row()) {
-            // failed to read value for whatever reason
-            tx.abort();
-            reply->set_is_committed(false);
-            printf("jenndebug reads failed to peek/read row()\n");
-            return Status::CANCELLED;
-          }
-          smdbrpc::KVPair *kvPair = reply->add_read_valueset();
-          kvPair->set_key(key);
-          uint64_t val;
-          memcpy(&val, &rah.cdata()[0], sizeof(val));
-          kvPair->set_value(val);
-        }
-      }
-
-      // writes
-      for (int i = 0; i < request->write_keyset_size(); i++) {
-        uint64_t key = request->write_keyset(i).key();
-        uint64_t val = request->write_keyset(i).value();
-
-        RowAccessHandle rah(&tx);
-        auto row_id = static_cast<uint64_t>(-1);
-        if (hash_idx->lookup(&tx, key, true,
-                             [&row_id](auto &k, auto& v){
-                               (void) k;
-                               row_id = v;
-                               return true;
-                             }) > 0) {
-          // value already exists, just update it
-          if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
-              !rah.write_row()) {
-            // failed to write
-            tx.abort();
-            reply->set_is_committed(false);
-            printf("jenndebug failed to peek/write rows\n");
-            return Status::CANCELLED;
-          }
-          memcpy(&rah.data()[0], &val, sizeof(val));
-        } else {
-          // value does not exist yet. Create row and insert into index.
-
-          // make new row
-          if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
-            tx.abort();
-            reply->set_is_committed(false);
-            printf("jenndebug failed to allocate new_row()\n");
-            return Status::CANCELLED;
-          }
-          //rah.data()[0] = static_cast<char>(val);
-          memcpy(&rah.data()[0], &val, sizeof(val));
-
-          // insert into index
-          row_id = rah.row_id();
-          if (hash_idx->insert(&tx, key, row_id) != 1) {
-            tx.abort();
-            reply->set_is_committed(false);
-            printf("jenndebug failed to insert new row into hash_index\n");
-            return Status::CANCELLED;
-          }
-        }
-      }
-
-      // commit
-      Result result;
-      if (!tx.commit(&result)){
-        tx.abort();
-        reply->set_is_committed(false);
-        printf("jenndebug failed to commit tx\n");
-        return Status::CANCELLED;
-      }
-      reply->set_is_committed(true);
-      return Status::OK;
-  }
-};
+//class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
+//  Status ContactHotshard(ServerContext* context, const HotshardRequest* request,
+//                  HotshardReply* reply) override {
+//
+//      auto tbl = db_ptr->get_table("main");
+//
+//      ::mica::util::lcore.pin_thread(0);
+//
+//      db_ptr->activate(static_cast<uint16_t>(0));
+//      Transaction tx(db_ptr->context(0));
+//
+//      //RowAccessHandle rah(&tx);
+//      Timestamp assigned_ts = Timestamp::make(
+//          0, static_cast<uint64_t>(request->hlctimestamp().walltime()), 0);
+//      // bool began_successfully = tx.begin(false, nullptr, &assigned_ts);
+//      if (!tx.begin(false, nullptr, &assigned_ts)) {
+//          printf("jenndebug tx.begin() failed.\n");
+//          reply->set_is_committed(false);
+//          return Status::CANCELLED;
+//      }
+//
+//      // reads
+//      for (uint64_t key : request->read_keyset()) {
+//
+//        auto row_id = static_cast<uint64_t>(-1);
+//        if (hash_idx->lookup(&tx, key, true /*skip_validation*/,
+//                             [&row_id](auto &k, auto& v){
+//                               (void) k;
+//                               row_id = v;
+//                               return true; /* jenndebug is this correct? */
+//                             }) > 0) {
+//          // value being read is found
+//          RowAccessHandle rah(&tx);
+//          if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
+//              !rah.read_row()) {
+//            // failed to read value for whatever reason
+//            tx.abort();
+//            reply->set_is_committed(false);
+//            printf("jenndebug reads failed to peek/read row()\n");
+//            return Status::CANCELLED;
+//          }
+//          smdbrpc::KVPair *kvPair = reply->add_read_valueset();
+//          kvPair->set_key(key);
+//          uint64_t val;
+//          memcpy(&val, &rah.cdata()[0], sizeof(val));
+//          kvPair->set_value(val);
+//        }
+//      }
+//
+//      // writes
+//      for (int i = 0; i < request->write_keyset_size(); i++) {
+//        uint64_t key = request->write_keyset(i).key();
+//        uint64_t val = request->write_keyset(i).value();
+//
+//        RowAccessHandle rah(&tx);
+//        auto row_id = static_cast<uint64_t>(-1);
+//        if (hash_idx->lookup(&tx, key, true,
+//                             [&row_id](auto &k, auto& v){
+//                               (void) k;
+//                               row_id = v;
+//                               return true;
+//                             }) > 0) {
+//          // value already exists, just update it
+//          if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
+//              !rah.write_row()) {
+//            // failed to write
+//            tx.abort();
+//            reply->set_is_committed(false);
+//            printf("jenndebug failed to peek/write rows\n");
+//            return Status::CANCELLED;
+//          }
+//          memcpy(&rah.data()[0], &val, sizeof(val));
+//        } else {
+//          // value does not exist yet. Create row and insert into index.
+//
+//          // make new row
+//          if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
+//            tx.abort();
+//            reply->set_is_committed(false);
+//            printf("jenndebug failed to allocate new_row()\n");
+//            return Status::CANCELLED;
+//          }
+//          //rah.data()[0] = static_cast<char>(val);
+//          memcpy(&rah.data()[0], &val, sizeof(val));
+//
+//          // insert into index
+//          row_id = rah.row_id();
+//          if (hash_idx->insert(&tx, key, row_id) != 1) {
+//            tx.abort();
+//            reply->set_is_committed(false);
+//            printf("jenndebug failed to insert new row into hash_index\n");
+//            return Status::CANCELLED;
+//          }
+//        }
+//      }
+//
+//      // commit
+//      Result result;
+//      if (!tx.commit(&result)){
+//        tx.abort();
+//        reply->set_is_committed(false);
+//        printf("jenndebug failed to commit tx\n");
+//        return Status::CANCELLED;
+//      }
+//      reply->set_is_committed(true);
+//      return Status::OK;
+//  }
+//};
 
 class ServerImpl final {
  public:
@@ -190,15 +192,16 @@ class ServerImpl final {
   void Run(int concurrency) {
     std::string server_address("0.0.0.0:50051");
 
-    grpc::ServerBuilder builder;
+    ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service_);
 
     for (int i = 0; i < concurrency; i++) {
       cq_vec_.emplace_back(builder.AddCompletionQueue().release());
     }
 
     server_ = builder.BuildAndStart().release();
-    std::cout << "Server listening on" << server_address << std::endl;
+    std::cout << "Server listening on " << server_address << std::endl;
 
     for (int i = 0; i < concurrency; i++) {
       server_threads_.emplace_back(std::thread([this, i]{HandleRpcs(i);}));
@@ -209,10 +212,13 @@ class ServerImpl final {
   }
 
  private:
+
   class CallData {
    public:
-    CallData(HotshardGateway::AsyncService* service, grpc::ServerCompletionQueue* cq)
-    : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE) {
+    CallData(HotshardGateway::AsyncService* service, ServerCompletionQueue* cq,
+             int thread_id)
+        : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE),
+          thread_id_(thread_id){
       Proceed();
     }
 
@@ -222,41 +228,162 @@ class ServerImpl final {
         service_->RequestContactHotshard(&ctx_, &request_, &responder_,
                                          cq_, cq_, this);
       } else if (status_ == PROCESS) {
-        reply_.set_is_committed(true);
+
         status_ = FINISH;
+
+        auto tbl = db_ptr->get_table("main");
+        ::mica::util::lcore.pin_thread(static_cast<size_t>(thread_id_));
+
+        db_ptr->activate(static_cast<uint16_t>(thread_id_));
+        Transaction tx(db_ptr->context(static_cast<uint16_t>(thread_id_)));
+
+
+        Timestamp assigned_ts = Timestamp::make(
+            static_cast<uint32_t>(request_.hlctimestamp().logicaltime()),
+            static_cast<uint64_t>(request_.hlctimestamp().walltime()),
+            static_cast<uint32_t>(thread_id_));
+
+        if (!tx.begin(false, nullptr//, &assigned_ts
+                      )) {
+          const std::string& err_msg ="jenndebug tx.begin() failed";
+          printf("%s\n", err_msg.c_str());
+          reply_.set_is_committed(false);
+          responder_.Finish(reply_, Status::OK, this);
+	  return;
+        }
+
+        // reads
+        for (uint64_t key : request_.read_keyset()) {
+          auto row_id = static_cast<uint64_t>(-1);
+          if (hash_idx->lookup(&tx, key, true /*skip_validation*/,
+                               [&row_id](auto& k, auto& v) {
+                                 (void)k;
+                                 row_id = v;
+                                 return true; /* jenndebug is this correct? */
+                               }) > 0) {
+            // value being read is found
+            RowAccessHandle rah(&tx);
+            if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
+                !rah.read_row()) {
+              // failed to read value for whatever reason
+              tx.abort();
+              reply_.set_is_committed(false);
+              const std::string& err_msg = "jenndebug reads failed to peek/read row()";
+              printf("%s\n", err_msg.c_str());
+              reply_.set_is_committed(false);
+              responder_.Finish(reply_, Status::OK, this);
+              return;
+            }
+            smdbrpc::KVPair* kvPair = reply_.add_read_valueset();
+            kvPair->set_key(key);
+            uint64_t val;
+            memcpy(&val, &rah.cdata()[0], sizeof(val));
+            kvPair->set_value(val);
+          }
+        }
+
+        // writes
+        for (int i = 0; i < request_.write_keyset_size(); i++) {
+          uint64_t key = request_.write_keyset(i).key();
+          uint64_t val = request_.write_keyset(i).value();
+
+          RowAccessHandle rah(&tx);
+          auto row_id = static_cast<uint64_t>(-1);
+          if (hash_idx->lookup(&tx, key, true, [&row_id](auto& k, auto& v) {
+                (void)k;
+                row_id = v;
+                return true;
+              }) > 0) {
+            // value already exists, just update it
+            if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
+                !rah.write_row()) {
+              // failed to write
+              tx.abort();
+              reply_.set_is_committed(false);
+              const char* err_msg = "jenndebug failed to peek/write rows";
+              printf("%s\n", err_msg);
+              reply_.set_is_committed(false);
+              responder_.Finish(reply_, Status::OK, this);
+	      return;
+            }
+            memcpy(&rah.data()[0], &val, sizeof(val));
+            printf("jenndebug value exists already\n");
+          } else {
+            // value does not exist yet. Create row and insert into index.
+
+            // make new row
+            if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
+              tx.abort();
+              reply_.set_is_committed(false);
+              const std::string& err_msg ="jenndebug failed to allocate new_row()";
+              printf("%s\n", err_msg.c_str());
+              reply_.set_is_committed(false);
+              responder_.Finish(reply_, Status::OK, this);
+	      return;
+            }
+            memcpy(&rah.data()[0], &val, sizeof(val));
+
+            // insert into index
+            row_id = rah.row_id();
+            if (hash_idx->insert(&tx, key, row_id) != 1) {
+              tx.abort();
+              reply_.set_is_committed(false);
+              const std::string& err_msg = "jenndebug failed to insert new row into hash_index";
+              printf("%s\n", err_msg.c_str());
+              responder_.Finish(reply_, Status::OK, this);
+	      return;
+            }
+          }
+          printf("jenndebug key %lu, val %lu\n", key, val);
+        }
+
+        // commit
+        Result result;
+        if (!tx.commit(&result)) {
+          tx.abort();
+          reply_.set_is_committed(false);
+          const std::string& err_msg ="jenndebug failed to commit tx";
+          printf("%s\n", err_msg.c_str());
+          reply_.set_is_committed(false);
+          responder_.Finish(reply_, Status::OK, this);
+	  return;
+        }
+
+        reply_.set_is_committed(true);
         responder_.Finish(reply_, Status::OK, this);
+
       } else {
-        new CallData(service_, cq_);
+        new CallData(service_, cq_, thread_id_);
         delete this;
       }
     }
 
    private:
+    int thread_id_;
     HotshardGateway::AsyncService* service_;
-    grpc::ServerCompletionQueue* cq_;
+    ServerCompletionQueue* cq_;
     ServerContext ctx_;
 
     HotshardRequest request_;
     HotshardReply reply_;
 
-    grpc::ServerAsyncResponseWriter<HotshardReply> responder_;
+    ServerAsyncResponseWriter<HotshardReply> responder_;
 
     enum CallStatus {CREATE, PROCESS, FINISH};
     CallStatus status_;
-
   };
 
   [[noreturn]] void HandleRpcs(int i) {
-    new CallData(&service_, cq_vec_[static_cast<unsigned long>(i)]);
+    new CallData(&service_, cq_vec_[i], i);
     void *tag;
     bool ok;
     while (true) {
-      cq_vec_[static_cast<unsigned long>(i)]->Next(&tag, &ok);
+      cq_vec_[i]->Next(&tag, &ok);
       static_cast<CallData *>(tag)->Proceed();
     }
   }
 
-  std::vector<grpc::ServerCompletionQueue*> cq_vec_;
+  std::vector<ServerCompletionQueue*> cq_vec_;
   HotshardGateway::AsyncService service_;
   Server* server_;
   std::list<std::thread> server_threads_;
@@ -268,6 +395,8 @@ void RunServer(int givenConcurrency) {
   if (givenConcurrency > 0)
     concurrency = givenConcurrency;
 
+  std::cout << "concurrency " << concurrency << std::endl;
+
   ServerImpl server;
   server.Run(concurrency);
 }
@@ -276,11 +405,13 @@ int main(int argc, char** argv) {
     auto config = ::mica::util::Config::load_file("test_tx.json");
 
     uint64_t num_rows = /* static_cast<uint64_t>(atol(argv[1]));*/ 100;
-    uint64_t reqs_per_tx = /*static_cast<uint64_t>(atol(argv[2]));*/ 2;
-    double read_ratio = /*atof(argv[3]);*/ 0.5;
-    double zipf_theta = /*atof(argv[4]);*/ 0.9;
-    uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 100;
-    uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
+    uint64_t reqs_per_tx = /*static_cast<uint64_t>(atol(argv[2]));*/ 16;
+    double read_ratio = /*atof(argv[3]);*/ 0.95;
+    double zipf_theta = /*atof(argv[4]);*/ 0.99;
+    uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 20000;
+    //uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
+    auto num_threads = static_cast<uint64_t>(atol(argv[1]));
+    //auto threshold = static_cast<uint64_t>(atol(argv[2]));
 
     Alloc alloc(config.get("alloc"));
     auto page_pool_size = 24 * uint64_t(1073741824);
@@ -356,107 +487,165 @@ int main(int argc, char** argv) {
 
         std::vector<std::thread> threads;
         uint64_t init_num_threads = std::min(uint64_t(2), num_threads);
-        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
-            threads.emplace_back([&, thread_id] {
-                ::mica::util::lcore.pin_thread(thread_id);
 
-                db.activate(static_cast<uint16_t>(thread_id));
-                while (db.active_thread_count() < init_num_threads) {
-                    ::mica::util::pause();
-                    db.idle(static_cast<uint16_t>(thread_id));
-                }
+//        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
+//          uint64_t partition = threshold / init_num_threads + 1;
+//          uint64_t floor = thread_id * partition;
+//          uint64_t ceiling = floor + partition;
+//          printf("thread id %lu, floor %lu, ceiling %lu\n", thread_id, floor, ceiling);
+//          threads.emplace_back([&, thread_id, floor, ceiling] {
+//            ::mica::util::lcore.pin_thread(thread_id);
+//
+//            db.activate(static_cast<uint16_t>(thread_id));
+//            while (db.active_thread_count() < init_num_threads) {
+//                  ::mica::util::pause();
+//                  db.idle(static_cast<uint16_t>(thread_id));
+//            }
+//            unsigned long interval = 5;
+//            for (uint64_t base = floor; base < ceiling; base += interval) {
+//              Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
+//              tx.begin();
+//              for (uint64_t i = 0; i < interval; i++) {
+//                uint64_t key = base + i;
+//                uint64_t val = 1;
+//
+//                // allocate new row
+//                RowAccessHandle rah(&tx);
+//                if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)){
+//                  printf("failed to allocate new row for key %lu\n", key);
+//                  continue;
+//                }
+//
+//                // copy data into new row
+//                memcpy(&rah.data()[0], &val, sizeof(val));
+//
+//                // insert new row into index
+//                auto row_id = rah.row_id();
+//                auto insert_ret = hash_idx->insert(&tx, key, row_id);
+//                if (insert_ret != 1) {
+//                  printf("failed to insert into index for key %lu, ret %d\n",
+//                         key, insert_ret);
+//                  continue;
+//                }
+//
+//              }
+//
+//              Result result;
+//              if (!tx.commit(&result)) {
+//                printf("failed to commit on keys %lu to %lu, result %d\n",
+//                       base, base + interval, result);
+//              }
+//            }
+//            db.deactivate(static_cast<uint16_t>(thread_id));
+//            return 0;
+//
+//          });
+//
+//        }
 
-                // Randomize the data layout by shuffling row insert order.
-                std::mt19937 g(thread_id);
-                std::vector<uint64_t> row_ids;
-                row_ids.reserve((num_rows + init_num_threads - 1) / init_num_threads);
-                for (uint64_t i = thread_id; i < num_rows; i += init_num_threads)
-                    row_ids.push_back(i);
-                std::shuffle(row_ids.begin(), row_ids.end(), g);
 
-                /** jennsection **/
-                std::vector<uint64_t> keys;
-                std::vector<uint64_t> values;
-                /** end jennsection **/
-
-                Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
-                const uint64_t kBatchSize = 16;
-                for (uint64_t i = 0; i < row_ids.size(); i += kBatchSize) {
-                    while (true) {
-                        bool ret = tx.begin();
-                        if (!ret) {
-                            printf("failed to start a transaction\n");
-                            continue;
-                        }
-
-                        bool aborted = false;
-                        auto i_end = std::min(i + kBatchSize, row_ids.size());
-                        for (uint64_t j = i; j < i_end; j++) {
-                            RowAccessHandle rah(&tx);
-                            if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
-                                             kDataSize)) {
-                                printf("failed to insert rows at new_row(), row = %" PRIu64
-                                       "\n",
-                                       j);
-                                aborted = true;
-                                tx.abort();
-                                break;
-                            }
-
-                            if (kUseHashIndex) {
-                                auto row_id_jenn = row_ids[j];
-                                auto value_jenn = rah.row_id();
-                                keys.push_back(row_id_jenn); // jennsection
-                                values.push_back(value_jenn); // jennsection
-                                auto ret = hash_idx->insert(&tx, row_id_jenn, value_jenn);
-                                if (ret != 1 || ret == HashIndex::kHaveToAbort) {
-                                    printf("failed to update index row = %" PRIu64 "\n", j);
-                                    aborted = true;
-                                    tx.abort();
-                                    break;
-                                } else {
-                                    printf("jenndebug inserted (%lu, %lu)\n", row_id_jenn, value_jenn);
-                                }
-                            }
-
-                        }
-
-                        if (aborted) continue;
-
-                        Result result;
-                        if (!tx.commit(&result)) {
-                            printf("failed to insert rows at commit(), row = %" PRIu64
-                                   "; result=%d\n",
-                                   i_end - 1, static_cast<int>(result));
-                            continue;
-                        }
-                        break;
-                    }
-
-                    /** jennsection **/
-                    tx.begin();
-
-                    uint64_t value = 0;
-                    for (const auto& key : keys) {
-                        auto lookup_result =
-                                hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
-                                                 [&value](auto& k, auto& v) {
-                                                     (void)k;
-                                                     value = v;
-                                                     return true;
-                                                 });
-                        printf("jenndebug found %lu, (%lu, %lu)\n", lookup_result, key, value);
-                    }
-                    Result result;
-                    tx.commit(&result);
-                    /** end jennsection **/
-
-                }
-
-                db.deactivate(static_cast<uint16_t>(thread_id));
-                return 0;
-            });
-        }
+//        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
+//            threads.emplace_back([&, thread_id] {
+//                ::mica::util::lcore.pin_thread(thread_id);
+//
+//                db.activate(static_cast<uint16_t>(thread_id));
+//                while (db.active_thread_count() < init_num_threads) {
+//                    ::mica::util::pause();
+//                    db.idle(static_cast<uint16_t>(thread_id));
+//                }
+//
+//                // Randomize the data layout by shuffling row insert order.
+////                std::mt19937 g(thread_id);
+////                std::vector<uint64_t> row_ids;
+////                row_ids.reserve((num_rows + init_num_threads - 1) / init_num_threads);
+////                for (uint64_t i = thread_id; i < num_rows; i += init_num_threads)
+////                    row_ids.push_back(i);
+////                std::shuffle(row_ids.begin(), row_ids.end(), g);
+//
+//                /** jennsection **/
+////                std::vector<uint64_t> keys;
+////                std::vector<uint64_t> values;
+//                /** end jennsection **/
+//
+////                Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
+////                const uint64_t kBatchSize = 16;
+////                for (uint64_t i = 0; i < row_ids.size(); i += kBatchSize) {
+////                    while (true) {
+////                        bool ret = tx.begin();
+////                        if (!ret) {
+////                            printf("failed to start a transaction\n");
+////                            continue;
+////                        }
+////
+////                        bool aborted = false;
+////                        auto i_end = std::min(i + kBatchSize, row_ids.size());
+////                        for (uint64_t j = i; j < i_end; j++) {
+////                            RowAccessHandle rah(&tx);
+////                            if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
+////                                             kDataSize)) {
+////                                printf("failed to insert rows at new_row(), row = %" PRIu64
+////                                       "\n",
+////                                       j);
+////                                aborted = true;
+////                                tx.abort();
+////                                break;
+////                            }
+//
+////                            if (kUseHashIndex) {
+////                                auto row_id_jenn = row_ids[j];
+////                                auto value_jenn = rah.row_id();
+////                                keys.push_back(row_id_jenn); // jennsection
+////                                values.push_back(value_jenn); // jennsection
+////                                auto ret = hash_idx->insert(&tx, row_id_jenn, value_jenn);
+////                                if (ret != 1 || ret == HashIndex::kHaveToAbort) {
+////                                    printf("failed to update index row = %" PRIu64 "\n", j);
+////                                    aborted = true;
+////                                    tx.abort();
+////                                    break;
+////                                } else {
+////                                    printf("jenndebug inserted (%lu, %lu)\n", row_id_jenn, value_jenn);
+////                                }
+////                            }
+////
+////                        }
+//
+////                        if (aborted) continue;
+////
+////                        Result result;
+////                        if (!tx.commit(&result)) {
+////                            printf("failed to insert rows at commit(), row = %" PRIu64
+////                                   "; result=%d\n",
+////                                   i_end - 1, static_cast<int>(result));
+////                            continue;
+////                        }
+////                        break;
+////                    }
+////
+////                    /** jennsection **/
+////                    //tx.begin();
+////
+////                    //uint64_t value = 0;
+////                    //for (const auto& key : keys) {
+////                    //    auto lookup_result =
+////                    //            hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
+////                    //                             [&value](auto& k, auto& v) {
+////                    //                                 (void)k;
+////                    //                                 value = v;
+////                    //                                 return true;
+////                    //                             });
+////                    //    printf("jenndebug found %lu, (%lu, %lu)\n", lookup_result, key, value);
+////                    //}
+////                    //Result result;
+////                    //tx.commit(&result);
+////                    /** end jennsection **/
+////                    printf("jenndebug allright\n");
+////
+////                }
+////
+//                db.deactivate(static_cast<uint16_t>(thread_id));
+//                return 0;
+//            });
+//        }
 
         while (threads.size() > 0) {
             threads.back().join();
@@ -483,7 +672,7 @@ int main(int argc, char** argv) {
 
     }
 
-  RunServer(num_threads);
+    RunServer(num_threads);
 
   return 0;
 }

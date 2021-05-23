@@ -7,6 +7,27 @@
 #include "mica/util/rand.h"
 #include "mica/test/test_tx_conf.h"
 
+#include <iostream>
+#include <memory>
+#include <string>
+#include <stdlib.h>
+
+#include <grpcpp/grpcpp.h>
+#include <grpcpp/ext/proto_server_reflection_plugin.h>
+
+#include "../build/smdbrpc.grpc.pb.h"
+
+using grpc::Server;
+using grpc::ServerAsyncResponseWriter;
+using grpc::ServerBuilder;
+using grpc::ServerContext;
+using grpc::ServerCompletionQueue;
+using grpc::Status;
+using smdbrpc::HotshardRequest;
+using smdbrpc::HotshardReply;
+using smdbrpc::HotshardGateway;
+using smdbrpc::HLCTimestamp;
+
 typedef DBConfig::Alloc Alloc;
 typedef DBConfig::Logger Logger;
 typedef DBConfig::Timestamp Timestamp;
@@ -25,6 +46,230 @@ typedef ::mica::transaction::Transaction<DBConfig> Transaction;
 typedef ::mica::transaction::Result Result;
 
 static ::mica::util::Stopwatch sw;
+
+
+class ServerImpl final {
+ public:
+  ~ServerImpl() {
+    server_->Shutdown();
+
+    for (auto& cq: cq_vec_)
+      cq->Shutdown();
+  }
+
+  void Run(int concurrency, DB* db_ptr, HashIndex* hash_idx) {
+    std::string server_address("0.0.0.0:50051");
+
+    ServerBuilder builder;
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service_);
+
+    for (int i = 0; i < concurrency; i++) {
+      cq_vec_.emplace_back(builder.AddCompletionQueue().release());
+    }
+
+    server_ = builder.BuildAndStart().release();
+    std::cout << "Server listening on " << server_address << std::endl;
+
+    for (int i = 0; i < concurrency; i++) {
+      server_threads_.emplace_back(std::thread([this, i, db_ptr, hash_idx]{HandleRpcs(i, db_ptr, hash_idx);}));
+    }
+
+    for (auto& thread: server_threads_)
+      thread.join();
+  }
+
+ private:
+
+  class CallData {
+   public:
+    CallData(HotshardGateway::AsyncService* service, ServerCompletionQueue* cq,
+             int thread_id, DB* db_ptr, HashIndex* hash_idx)
+        : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE),
+          thread_id_(thread_id), db_ptr_(db_ptr), hash_idx_(hash_idx) {
+      Proceed();
+    }
+
+    void Proceed() {
+      if (status_ == CREATE) {
+        status_ = PROCESS;
+        service_->RequestContactHotshard(&ctx_, &request_, &responder_,
+                                         cq_, cq_, this);
+      } else if (status_ == PROCESS) {
+
+        status_ = FINISH;
+
+        auto tbl = db_ptr_->get_table("main");
+        ::mica::util::lcore.pin_thread(static_cast<size_t>(thread_id_));
+
+        db_ptr_->activate(static_cast<uint16_t>(thread_id_));
+        Transaction tx(db_ptr_->context(static_cast<uint16_t>(thread_id_)));
+
+
+        Timestamp assigned_ts = Timestamp::make(
+            static_cast<uint32_t>(request_.hlctimestamp().logicaltime()),
+            static_cast<uint64_t>(request_.hlctimestamp().walltime()),
+            static_cast<uint32_t>(thread_id_));
+
+        if (!tx.begin(false, nullptr//, &assigned_ts
+        )) {
+          const std::string& err_msg ="jenndebug tx.begin() failed";
+          printf("%s\n", err_msg.c_str());
+          reply_.set_is_committed(false);
+          responder_.Finish(reply_, Status::OK, this);
+          return;
+        }
+
+        // reads
+        for (uint64_t key : request_.read_keyset()) {
+          auto row_id = static_cast<uint64_t>(-1);
+          if (hash_idx_->lookup(&tx, key, true /*skip_validation*/,
+                               [&row_id](auto& k, auto& v) {
+                                 (void)k;
+                                 row_id = v;
+                                 return true; /* jenndebug is this correct? */
+                               }) > 0) {
+            // value being read is found
+            RowAccessHandle rah(&tx);
+            if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
+                !rah.read_row()) {
+              // failed to read value for whatever reason
+              tx.abort();
+              reply_.set_is_committed(false);
+              const std::string& err_msg = "jenndebug reads failed to peek/read row()";
+              printf("%s\n", err_msg.c_str());
+              reply_.set_is_committed(false);
+              responder_.Finish(reply_, Status::OK, this);
+              return;
+            }
+            smdbrpc::KVPair* kvPair = reply_.add_read_valueset();
+            kvPair->set_key(key);
+            uint64_t val;
+            memcpy(&val, &rah.cdata()[0], sizeof(val));
+            kvPair->set_value(val);
+          }
+        }
+
+        // writes
+        for (int i = 0; i < request_.write_keyset_size(); i++) {
+          uint64_t key = request_.write_keyset(i).key();
+          uint64_t val = request_.write_keyset(i).value();
+
+          RowAccessHandle rah(&tx);
+          auto row_id = static_cast<uint64_t>(-1);
+          if (hash_idx_->lookup(&tx, key, true, [&row_id](auto& k, auto& v) {
+            (void)k;
+            row_id = v;
+            return true;
+          }) > 0) {
+            // value already exists, just update it
+            if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
+                !rah.write_row()) {
+              // failed to write
+              tx.abort();
+              reply_.set_is_committed(false);
+              const char* err_msg = "jenndebug failed to peek/write rows";
+              printf("%s\n", err_msg);
+              reply_.set_is_committed(false);
+              responder_.Finish(reply_, Status::OK, this);
+              return;
+            }
+            memcpy(&rah.data()[0], &val, sizeof(val));
+            printf("jenndebug value exists already\n");
+          } else {
+            // value does not exist yet. Create row and insert into index.
+
+            // make new row
+            if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
+              tx.abort();
+              reply_.set_is_committed(false);
+              const std::string& err_msg ="jenndebug failed to allocate new_row()";
+              printf("%s\n", err_msg.c_str());
+              reply_.set_is_committed(false);
+              responder_.Finish(reply_, Status::OK, this);
+              return;
+            }
+            memcpy(&rah.data()[0], &val, sizeof(val));
+
+            // insert into index
+            row_id = rah.row_id();
+            if (hash_idx_->insert(&tx, key, row_id) != 1) {
+              tx.abort();
+              reply_.set_is_committed(false);
+              const std::string& err_msg = "jenndebug failed to insert new row into hash_index";
+              printf("%s\n", err_msg.c_str());
+              responder_.Finish(reply_, Status::OK, this);
+              return;
+            }
+          }
+          printf("jenndebug key %lu, val %lu\n", key, val);
+        }
+
+        // commit
+        Result result;
+        if (!tx.commit(&result)) {
+          tx.abort();
+          reply_.set_is_committed(false);
+          const std::string& err_msg ="jenndebug failed to commit tx";
+          printf("%s\n", err_msg.c_str());
+          reply_.set_is_committed(false);
+          responder_.Finish(reply_, Status::OK, this);
+          return;
+        }
+
+        reply_.set_is_committed(true);
+        responder_.Finish(reply_, Status::OK, this);
+
+      } else {
+        new CallData(service_, cq_, thread_id_, db_ptr_, hash_idx_);
+        delete this;
+      }
+    }
+
+   private:
+    HashIndex* hash_idx_;
+    DB* db_ptr_;
+    int thread_id_;
+    HotshardGateway::AsyncService* service_;
+    ServerCompletionQueue* cq_;
+    ServerContext ctx_;
+
+    HotshardRequest request_;
+    HotshardReply reply_;
+
+    ServerAsyncResponseWriter<HotshardReply> responder_;
+
+    enum CallStatus {CREATE, PROCESS, FINISH};
+    CallStatus status_;
+  };
+
+  [[noreturn]] void HandleRpcs(int i, DB* db_ptr, HashIndex* hash_idx) {
+    new CallData(&service_, cq_vec_[i], i, db_ptr, hash_idx);
+    void *tag;
+    bool ok;
+    while (true) {
+      cq_vec_[i]->Next(&tag, &ok);
+      static_cast<CallData *>(tag)->Proceed();
+    }
+  }
+
+  std::vector<ServerCompletionQueue*> cq_vec_;
+  HotshardGateway::AsyncService service_;
+  Server* server_;
+  std::list<std::thread> server_threads_;
+};
+
+void RunServer(int givenConcurrency, DB* db_ptr, HashIndex* hash_idx) {
+
+  int concurrency = static_cast<int>(std::thread::hardware_concurrency());
+  if (givenConcurrency > 0)
+    concurrency = givenConcurrency;
+
+  std::cout << "concurrency " << concurrency << std::endl;
+
+  ServerImpl server;
+  server.Run(concurrency, db_ptr, hash_idx);
+}
 
 // Worker task.
 
@@ -891,7 +1136,7 @@ int main(int argc, const char* argv[]) {
           }
         }
 
-        // Register the new version.  It is guranteed to be the latest version
+        // Register the new version.  It is guaranteed to be the latest version
         // because we chose the transaction in their commit ts order.
         // if (!is_read) table_ts[row_id] = next_ts;
         // Since we now have a promotion, a read may be actually a write.
@@ -941,6 +1186,9 @@ int main(int argc, const char* argv[]) {
       }
     }
   }
+
+  RunServer(num_threads, &db, hash_idx);
+
 
   return EXIT_SUCCESS;
 }

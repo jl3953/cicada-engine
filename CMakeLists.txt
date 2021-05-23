@@ -228,8 +228,10 @@ IF(LTO)
   ADD_EXECUTABLE(test_tsc_sync src/mica/test/test_tsc_sync.cc ${SOURCES})
   TARGET_LINK_LIBRARIES(test_tsc_sync ${LIBRARIES})
 
-  ADD_EXECUTABLE(test_tx src/mica/test/test_tx.cc ${SOURCES})
-  TARGET_LINK_LIBRARIES(test_tx ${LIBRARIES})
+  ADD_EXECUTABLE(test_tx src/mica/test/test_tx.cc ${SOURCES}
+      ${hw_proto_srcs} ${hw_grpc_srcs})
+  TARGET_LINK_LIBRARIES(test_tx ${LIBRARIES}
+      ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
 
   ADD_EXECUTABLE(test_tx_index src/mica/test/test_tx_index.cc ${SOURCES})
   TARGET_LINK_LIBRARIES(test_tx_index ${LIBRARIES})
