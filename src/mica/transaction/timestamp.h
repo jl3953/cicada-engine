@@ -3,6 +3,7 @@
 #define MICA_TRANSACTION_TIMESTAMP_H_
 
 #include <cassert>
+#include <cstdio>
 #include "mica/common.h"
 #include "mica/util/barrier.h"
 
@@ -151,7 +152,7 @@ struct WideTimestamp {
 struct WideConcurrentTimestamp {
   volatile uint64_t t1;
   volatile uint64_t t2;
-  volatile uint64_t version;
+  volatile uint64_t version = 0;
 
   WideTimestamp get() const {
     // Get a stable (not mutating) version of concurrent ts.

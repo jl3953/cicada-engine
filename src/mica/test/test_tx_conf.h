@@ -89,8 +89,8 @@ struct DBConfig : public ::mica::transaction::BasicDBConfig {
   static constexpr int64_t kMinQuiescenceInterval = MICA_SLOW_GC;
 #endif
 
-// typedef ::mica::transaction::WideTimestamp Timestamp;
-// typedef ::mica::transaction::WideConcurrentTimestamp ConcurrentTimestamp;
+ typedef ::mica::transaction::WideTimestamp Timestamp;
+ typedef ::mica::transaction::WideConcurrentTimestamp ConcurrentTimestamp;
 #if MICA_NO_TSC
   typedef ::mica::transaction::CentralizedTimestamp Timestamp;
   typedef ::mica::transaction::CentralizedConcurrentTimestamp
