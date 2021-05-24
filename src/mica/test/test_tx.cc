@@ -111,8 +111,7 @@ class ServerImpl final {
             static_cast<uint64_t>(request_.hlctimestamp().walltime()),
             static_cast<uint32_t>(thread_id_));
 
-        if (!tx.begin(false, &assigned_ts, nullptr//, &assigned_ts
-        )) {
+        if (!tx.begin(false, &assigned_ts, nullptr)) {
           const std::string& err_msg ="jenndebug tx.begin() failed";
           printf("%s\n", err_msg.c_str());
           reply_.set_is_committed(false);
@@ -163,7 +162,7 @@ class ServerImpl final {
             return false;
           }) == 1) {
             // value already exists, just update it
-            if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
+            if (!rah.peek_row(tbl, 0, row_id, true, true, true) ||
                 !rah.write_row()) {
               // failed to write
               tx.abort();
