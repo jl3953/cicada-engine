@@ -203,6 +203,7 @@ class ServerImpl final {
           }
           printf("jenndebug key %lu, val %lu\n", key, val);
         }
+        printf("jenndebug tx.access_size()=%d\n", tx.access_size());
 
         // commit
         Result result;
@@ -411,7 +412,7 @@ void worker_proc(Task* task) {
 
       uint64_t v = 0;
 
-      bool use_peek_only = kUseSnapshot && task->read_only_tx[tx_i];
+      bool use_peek_only = task->read_only_tx[tx_i] != 0;
 
       bool ret = tx.begin(use_peek_only);
       assert(ret);
@@ -431,7 +432,7 @@ void worker_proc(Task* task) {
                                  row_id = v;
                                  return false;
                                });
-          if (lookup_result != 1 || lookup_result == HashIndex::kHaveToAbort) {
+          if (lookup_result != 1) {
             assert(false);
             tx.abort();
             aborted = true;
@@ -445,7 +446,7 @@ void worker_proc(Task* task) {
                                   row_id = v;
                                   return false;
                                 });
-          if (lookup_result != 1 || lookup_result == BTreeIndex::kHaveToAbort) {
+          if (lookup_result != 1) {
             assert(false);
             tx.abort();
             aborted = true;
@@ -510,7 +511,7 @@ void worker_proc(Task* task) {
             for (uint64_t j = 0; j < kColumnSize; j += 64)
               v += static_cast<uint64_t>(data[j]);
             v += static_cast<uint64_t>(data[kColumnSize - 1]);
-          } else if (!kUseFullTableScan) {
+          } else if (!kUseFullTableScan)  {
             RowAccessHandlePeekOnly rah(&tx);
 
             uint64_t next_row_id = row_id;
@@ -690,7 +691,7 @@ int main(int argc, const char* argv[]) {
 
   HashIndex* hash_idx = nullptr;
   if (kUseHashIndex) {
-    bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
+    bool ret = db.create_hash_index_unique_u64("main_idx", tbl, 3000000);//num_rows);
     assert(ret);
     (void)ret;
 
@@ -731,7 +732,7 @@ int main(int argc, const char* argv[]) {
         row_ids.reserve((num_rows + init_num_threads - 1) / init_num_threads);
         for (uint64_t i = thread_id; i < num_rows; i += init_num_threads)
           row_ids.push_back(i);
-        std::shuffle(row_ids.begin(), row_ids.end(), g);
+        //std::shuffle(row_ids.begin(), row_ids.end(), g);
 
         Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
         const uint64_t kBatchSize = 16;
@@ -746,12 +747,13 @@ int main(int argc, const char* argv[]) {
             bool aborted = false;
             auto i_end = std::min(i + kBatchSize, row_ids.size());
             for (uint64_t j = i; j < i_end; j++) {
+              printf("jenndebug tx.access_size %d\n", tx.access_size());
               RowAccessHandle rah(&tx);
               if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
                                kDataSize)) {
-                // printf("failed to insert rows at new_row(), row = %" PRIu64
-                //        "\n",
-                //        j);
+                 printf("failed to insert rows at new_row(), row = %" PRIu64
+                        "\n",
+                        j);
                 aborted = true;
                 tx.abort();
                 break;
@@ -759,13 +761,14 @@ int main(int argc, const char* argv[]) {
 
               if (kUseHashIndex) {
                 auto ret = hash_idx->insert(&tx, row_ids[j], rah.row_id());
-                if (ret != 1 || ret == HashIndex::kHaveToAbort) {
-                  // printf("failed to update index row = %" PRIu64 "\n", j);
+                if (ret != 1) {
+                   printf("failed to update index row = %" PRIu64 "\n", j);
                   aborted = true;
                   tx.abort();
                   break;
                 }
               }
+              printf("jenndebug tx.access_size now %d, row=%lu\n", tx.access_size(), row_ids[j]);
               if (kUseBTreeIndex) {
                 auto ret = btree_idx->insert(&tx, row_ids[j], rah.row_id());
                 if (ret != 1 || ret == BTreeIndex::kHaveToAbort) {
@@ -777,6 +780,7 @@ int main(int argc, const char* argv[]) {
               }
             }
 
+            printf("jenndebug ===============\n");
             if (aborted) continue;
 
             Result result;
@@ -1185,6 +1189,80 @@ int main(int argc, const char* argv[]) {
       }
     }
   }
+
+//  // init table
+//  printf("jenndebug\n");
+//  printf("jenndebug2\n");
+//  printf("jenndebug3\n");
+//  uint64_t single_init_thread = 0;
+//  db.deactivate(0);
+//  ::mica::util::lcore.pin_thread(static_cast<size_t>(single_init_thread));
+//  db.activate(static_cast<uint16_t>(single_init_thread));
+//  int batch = 1;
+//  for (int i = 0; i < 1000000; i += batch) {
+//    Transaction tx(db.context(static_cast<uint16_t>(single_init_thread)));
+//    if (!tx.begin()) {
+//      printf("jenndebug tx.begin() failed on i=%d\n", i);
+//      assert(false);
+//    }
+//    for (int j = i; j < i+batch; j++) {
+//      printf("jenndebug about to start j=%d, access_size()=%d\n", j, tx.access_size());
+//
+//      RowAccessHandle rah(&tx);
+//      auto row_id = static_cast<uint64_t>(-214);
+//      if (hash_idx->lookup(&tx, static_cast<const unsigned long>(j), true,
+//                           [&row_id](auto& k, auto& v) {
+//                             (void)k;
+//                             row_id = v;
+//                             return false;
+//                           }) == 1) {
+//        // value already exists, just update it
+//        printf("jenndebug hash_idx lookup\n");
+//        if (!rah.peek_row(tbl, 0, row_id, true, true, true) ||
+//            !rah.write_row()) {
+//          // failed to write
+//          tx.abort();
+//          printf("jenndebug failed to write to existing row j=%d\n", j);
+//          assert(false);
+//        }
+//        printf("jenndebug peek_row\n");
+//      } else {
+//        // value does not exist yet. Create row and insert into index.
+//
+//        // make new row
+//        printf("jenndebug hash_idx lookup2\n");
+//        if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
+//          tx.abort();
+//          printf("jenndebug failed to allocate new row for j=%d\n", j);
+//          assert(false);
+//        }
+//        printf("jenndebug new_row\n");
+//      }
+//      memcpy(&rah.data()[0], &j, sizeof(j));
+//
+//      // insert into index
+//      row_id = rah.row_id();
+//      if (hash_idx->insert(&tx, static_cast<const unsigned long>(j), row_id) != 1) {
+//        tx.abort();
+//        printf("jenndebug failed to insert row into hash index j=%d\n", j);
+//        assert(false);
+//      } else {
+//        printf("jenndebug finished j=%d, access_size()=%d\n", j,
+//               tx.access_size());
+//        printf("jenndebug hash_idx insert=====================\n");
+//      }
+//    }
+//
+//    Result result;
+//    if (!tx.commit(&result)) {
+//      tx.abort();
+//      printf("jenndebug tx.commit() failed on i=%d, result=%d\n", i, result);
+//      assert(false);
+//    }
+//    printf("jenndebug commit\n");
+//  }
+//
+//  db.deactivate(static_cast<uint16_t>(single_init_thread));
 
   RunServer(num_threads, &db, hash_idx);
 
