@@ -1,26 +1,9 @@
-/*
- *
- * Copyright 2015 gRPC authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
 #include <cstdio>
 #include <thread>
 #include <random>
 #include "mica/transaction/db.h"
 #include "mica/util/lcore.h"
-//#include "mica/util/zipf.h"
+#include "mica/util/zipf.h"
 #include "mica/util/rand.h"
 #include "mica/test/test_tx_conf.h"
 
@@ -30,7 +13,6 @@
 #include <stdlib.h>
 
 #include <grpcpp/grpcpp.h>
-#include <grpcpp/health_check_service_interface.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 
 #include "../build/smdbrpc.grpc.pb.h"
@@ -55,130 +37,16 @@ typedef ::mica::transaction::PagePool<DBConfig> PagePool;
 typedef ::mica::transaction::DB<DBConfig> DB;
 typedef ::mica::transaction::Table<DBConfig> Table;
 typedef DB::HashIndexUniqueU64 HashIndex;
-//typedef DB::HashIndexNonuniqueU64 HashIndex;
 typedef DB::BTreeIndexUniqueU64 BTreeIndex;
 typedef ::mica::transaction::RowVersion<DBConfig> RowVersion;
 typedef ::mica::transaction::RowAccessHandle<DBConfig> RowAccessHandle;
 typedef ::mica::transaction::RowAccessHandlePeekOnly<DBConfig>
-        RowAccessHandlePeekOnly;
+    RowAccessHandlePeekOnly;
 typedef ::mica::transaction::Transaction<DBConfig> Transaction;
 typedef ::mica::transaction::Result Result;
 
 static ::mica::util::Stopwatch sw;
 
-HashIndex* hash_idx = nullptr;
-DB* db_ptr = nullptr;
-
-
-// Logic and data behind the server's behavior.
-//class HotshardGatewayServiceImpl final : public HotshardGateway::Service {
-//  Status ContactHotshard(ServerContext* context, const HotshardRequest* request,
-//                  HotshardReply* reply) override {
-//
-//      auto tbl = db_ptr->get_table("main");
-//
-//      ::mica::util::lcore.pin_thread(0);
-//
-//      db_ptr->activate(static_cast<uint16_t>(0));
-//      Transaction tx(db_ptr->context(0));
-//
-//      //RowAccessHandle rah(&tx);
-//      Timestamp assigned_ts = Timestamp::make(
-//          0, static_cast<uint64_t>(request->hlctimestamp().walltime()), 0);
-//      // bool began_successfully = tx.begin(false, nullptr, &assigned_ts);
-//      if (!tx.begin(false, nullptr, &assigned_ts)) {
-//          printf("jenndebug tx.begin() failed.\n");
-//          reply->set_is_committed(false);
-//          return Status::CANCELLED;
-//      }
-//
-//      // reads
-//      for (uint64_t key : request->read_keyset()) {
-//
-//        auto row_id = static_cast<uint64_t>(-1);
-//        if (hash_idx->lookup(&tx, key, true /*skip_validation*/,
-//                             [&row_id](auto &k, auto& v){
-//                               (void) k;
-//                               row_id = v;
-//                               return true; /* jenndebug is this correct? */
-//                             }) > 0) {
-//          // value being read is found
-//          RowAccessHandle rah(&tx);
-//          if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
-//              !rah.read_row()) {
-//            // failed to read value for whatever reason
-//            tx.abort();
-//            reply->set_is_committed(false);
-//            printf("jenndebug reads failed to peek/read row()\n");
-//            return Status::CANCELLED;
-//          }
-//          smdbrpc::KVPair *kvPair = reply->add_read_valueset();
-//          kvPair->set_key(key);
-//          uint64_t val;
-//          memcpy(&val, &rah.cdata()[0], sizeof(val));
-//          kvPair->set_value(val);
-//        }
-//      }
-//
-//      // writes
-//      for (int i = 0; i < request->write_keyset_size(); i++) {
-//        uint64_t key = request->write_keyset(i).key();
-//        uint64_t val = request->write_keyset(i).value();
-//
-//        RowAccessHandle rah(&tx);
-//        auto row_id = static_cast<uint64_t>(-1);
-//        if (hash_idx->lookup(&tx, key, true,
-//                             [&row_id](auto &k, auto& v){
-//                               (void) k;
-//                               row_id = v;
-//                               return true;
-//                             }) > 0) {
-//          // value already exists, just update it
-//          if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
-//              !rah.write_row()) {
-//            // failed to write
-//            tx.abort();
-//            reply->set_is_committed(false);
-//            printf("jenndebug failed to peek/write rows\n");
-//            return Status::CANCELLED;
-//          }
-//          memcpy(&rah.data()[0], &val, sizeof(val));
-//        } else {
-//          // value does not exist yet. Create row and insert into index.
-//
-//          // make new row
-//          if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
-//            tx.abort();
-//            reply->set_is_committed(false);
-//            printf("jenndebug failed to allocate new_row()\n");
-//            return Status::CANCELLED;
-//          }
-//          //rah.data()[0] = static_cast<char>(val);
-//          memcpy(&rah.data()[0], &val, sizeof(val));
-//
-//          // insert into index
-//          row_id = rah.row_id();
-//          if (hash_idx->insert(&tx, key, row_id) != 1) {
-//            tx.abort();
-//            reply->set_is_committed(false);
-//            printf("jenndebug failed to insert new row into hash_index\n");
-//            return Status::CANCELLED;
-//          }
-//        }
-//      }
-//
-//      // commit
-//      Result result;
-//      if (!tx.commit(&result)){
-//        tx.abort();
-//        reply->set_is_committed(false);
-//        printf("jenndebug failed to commit tx\n");
-//        return Status::CANCELLED;
-//      }
-//      reply->set_is_committed(true);
-//      return Status::OK;
-//  }
-//};
 
 class ServerImpl final {
  public:
@@ -189,7 +57,7 @@ class ServerImpl final {
       cq->Shutdown();
   }
 
-  void Run(int concurrency) {
+  void Run(int concurrency, DB* db_ptr, HashIndex* hash_idx) {
     std::string server_address("0.0.0.0:50051");
 
     ServerBuilder builder;
@@ -204,7 +72,7 @@ class ServerImpl final {
     std::cout << "Server listening on " << server_address << std::endl;
 
     for (int i = 0; i < concurrency; i++) {
-      server_threads_.emplace_back(std::thread([this, i]{HandleRpcs(i);}));
+      server_threads_.emplace_back(std::thread([this, i, db_ptr, hash_idx]{HandleRpcs(i, db_ptr, hash_idx);}));
     }
 
     for (auto& thread: server_threads_)
@@ -216,9 +84,9 @@ class ServerImpl final {
   class CallData {
    public:
     CallData(HotshardGateway::AsyncService* service, ServerCompletionQueue* cq,
-             int thread_id)
+             int thread_id, DB* db_ptr, HashIndex* hash_idx)
         : service_(service), cq_(cq), responder_(&ctx_), status_(CREATE),
-          thread_id_(thread_id){
+          thread_id_(thread_id), db_ptr_(db_ptr), hash_idx_(hash_idx) {
       Proceed();
     }
 
@@ -231,11 +99,11 @@ class ServerImpl final {
 
         status_ = FINISH;
 
-        auto tbl = db_ptr->get_table("main");
+        auto tbl = db_ptr_->get_table("main");
         ::mica::util::lcore.pin_thread(static_cast<size_t>(thread_id_));
 
-        db_ptr->activate(static_cast<uint16_t>(thread_id_));
-        Transaction tx(db_ptr->context(static_cast<uint16_t>(thread_id_)));
+        db_ptr_->activate(static_cast<uint16_t>(thread_id_));
+        Transaction tx(db_ptr_->context(static_cast<uint16_t>(thread_id_)));
 
 
         Timestamp assigned_ts = Timestamp::make(
@@ -243,24 +111,23 @@ class ServerImpl final {
             static_cast<uint64_t>(request_.hlctimestamp().walltime()),
             static_cast<uint32_t>(thread_id_));
 
-        if (!tx.begin(false, nullptr//, &assigned_ts
-                      )) {
+        if (!tx.begin(false, &assigned_ts, nullptr)) {
           const std::string& err_msg ="jenndebug tx.begin() failed";
           printf("%s\n", err_msg.c_str());
           reply_.set_is_committed(false);
           responder_.Finish(reply_, Status::OK, this);
-	  return;
+          return;
         }
 
         // reads
         for (uint64_t key : request_.read_keyset()) {
           auto row_id = static_cast<uint64_t>(-1);
-          if (hash_idx->lookup(&tx, key, true /*skip_validation*/,
+          if (hash_idx_->lookup(&tx, key, true /*skip_validation*/,
                                [&row_id](auto& k, auto& v) {
                                  (void)k;
                                  row_id = v;
-                                 return true; /* jenndebug is this correct? */
-                               }) > 0) {
+                                 return false; /* jenndebug is this correct? */
+                               }) == 1) {
             // value being read is found
             RowAccessHandle rah(&tx);
             if (!rah.peek_row(tbl, 0, row_id, true, true, false) ||
@@ -289,13 +156,13 @@ class ServerImpl final {
 
           RowAccessHandle rah(&tx);
           auto row_id = static_cast<uint64_t>(-1);
-          if (hash_idx->lookup(&tx, key, true, [&row_id](auto& k, auto& v) {
-                (void)k;
-                row_id = v;
-                return true;
-              }) > 0) {
+          if (hash_idx_->lookup(&tx, key, true, [&row_id](auto& k, auto& v) {
+            (void)k;
+            row_id = v;
+            return false;
+          }) == 1) {
             // value already exists, just update it
-            if (!rah.peek_row(tbl, 0, row_id, true, false, true) ||
+            if (!rah.peek_row(tbl, 0, row_id, true, true, true) ||
                 !rah.write_row()) {
               // failed to write
               tx.abort();
@@ -304,10 +171,9 @@ class ServerImpl final {
               printf("%s\n", err_msg);
               reply_.set_is_committed(false);
               responder_.Finish(reply_, Status::OK, this);
-	      return;
+              return;
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
-            printf("jenndebug value exists already\n");
           } else {
             // value does not exist yet. Create row and insert into index.
 
@@ -319,22 +185,21 @@ class ServerImpl final {
               printf("%s\n", err_msg.c_str());
               reply_.set_is_committed(false);
               responder_.Finish(reply_, Status::OK, this);
-	      return;
+              return;
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
 
             // insert into index
             row_id = rah.row_id();
-            if (hash_idx->insert(&tx, key, row_id) != 1) {
+            if (hash_idx_->insert(&tx, key, row_id) != 1) {
               tx.abort();
               reply_.set_is_committed(false);
               const std::string& err_msg = "jenndebug failed to insert new row into hash_index";
               printf("%s\n", err_msg.c_str());
               responder_.Finish(reply_, Status::OK, this);
-	      return;
+              return;
             }
           }
-          printf("jenndebug key %lu, val %lu\n", key, val);
         }
 
         // commit
@@ -346,19 +211,21 @@ class ServerImpl final {
           printf("%s\n", err_msg.c_str());
           reply_.set_is_committed(false);
           responder_.Finish(reply_, Status::OK, this);
-	  return;
+          return;
         }
 
         reply_.set_is_committed(true);
         responder_.Finish(reply_, Status::OK, this);
 
       } else {
-        new CallData(service_, cq_, thread_id_);
+        new CallData(service_, cq_, thread_id_, db_ptr_, hash_idx_);
         delete this;
       }
     }
 
    private:
+    HashIndex* hash_idx_;
+    DB* db_ptr_;
     int thread_id_;
     HotshardGateway::AsyncService* service_;
     ServerCompletionQueue* cq_;
@@ -373,8 +240,8 @@ class ServerImpl final {
     CallStatus status_;
   };
 
-  [[noreturn]] void HandleRpcs(int i) {
-    new CallData(&service_, cq_vec_[i], i);
+  [[noreturn]] void HandleRpcs(int i, DB* db_ptr, HashIndex* hash_idx) {
+    new CallData(&service_, cq_vec_[i], i, db_ptr, hash_idx);
     void *tag;
     bool ok;
     while (true) {
@@ -389,7 +256,7 @@ class ServerImpl final {
   std::list<std::thread> server_threads_;
 };
 
-void RunServer(int givenConcurrency) {
+void RunServer(int givenConcurrency, DB* db_ptr, HashIndex* hash_idx) {
 
   int concurrency = static_cast<int>(std::thread::hardware_concurrency());
   if (givenConcurrency > 0)
@@ -398,281 +265,1003 @@ void RunServer(int givenConcurrency) {
   std::cout << "concurrency " << concurrency << std::endl;
 
   ServerImpl server;
-  server.Run(concurrency);
+  server.Run(concurrency, db_ptr, hash_idx);
 }
 
-int main(int argc, char** argv) {
-    auto config = ::mica::util::Config::load_file("test_tx.json");
+// Worker task.
 
-    uint64_t num_rows = /* static_cast<uint64_t>(atol(argv[1]));*/ 100;
-    uint64_t reqs_per_tx = /*static_cast<uint64_t>(atol(argv[2]));*/ 16;
-    double read_ratio = /*atof(argv[3]);*/ 0.95;
-    double zipf_theta = /*atof(argv[4]);*/ 0.99;
-    uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 20000;
-    //uint64_t num_threads = /*static_cast<uint64_t>(atol(argv[6]));*/ 2;
-    auto num_threads = static_cast<uint64_t>(atol(argv[1]));
-    //auto threshold = static_cast<uint64_t>(atol(argv[2]));
+struct Task {
+  DB* db;
+  Table* tbl;
+  HashIndex* hash_idx;
+  BTreeIndex* btree_idx;
 
-    Alloc alloc(config.get("alloc"));
-    auto page_pool_size = 24 * uint64_t(1073741824);
-    PagePool* page_pools[2];
-     if (num_threads == 1) {
-       page_pools[0] = new PagePool(&alloc, page_pool_size, 0);
-       page_pools[1] = nullptr;
-     } else {
-        page_pools[0] = new PagePool(&alloc, page_pool_size / 2, 0);
-        page_pools[1] = new PagePool(&alloc, page_pool_size / 2, 1);
-     }
+  uint64_t thread_id;
+  uint64_t num_threads;
 
-    ::mica::util::lcore.pin_thread(0);
+  // Workload.
+  uint64_t num_rows;
+  uint64_t tx_count;
+  uint16_t* req_counts;
+  uint8_t* read_only_tx;
+  uint32_t* scan_lens;
+  uint64_t* row_ids;
+  uint8_t* column_ids;
+  uint8_t* op_types;
 
-    sw.init_start();
-    sw.init_end();
+  // State (for VerificationLogger).
+  uint64_t tx_i;
+  uint64_t req_i;
+  uint64_t commit_i;
 
-    if (num_rows == 0) {
-        num_rows = SYNTH_TABLE_SIZE;
-        reqs_per_tx = REQ_PER_QUERY;
-        read_ratio = READ_PERC;
-        zipf_theta = ZIPF_THETA;
-        tx_count = MAX_TXN_PER_PART;
-        num_threads = THREAD_CNT;
-#ifndef NDEBUG
-        printf("!NDEBUG\n");
-    return EXIT_FAILURE;
-#endif
+  // Results.
+  struct timeval tv_start;
+  struct timeval tv_end;
+
+  uint64_t committed;
+  uint64_t scanned;
+
+  // Transaction log for verification.
+  uint64_t* commit_tx_i;
+  Timestamp* commit_ts;
+  Timestamp* read_ts;
+  Timestamp* write_ts;
+} __attribute__((aligned(64)));
+
+template <class StaticConfig>
+class VerificationLogger
+    : public ::mica::transaction::LoggerInterface<StaticConfig> {
+ public:
+  VerificationLogger() : tasks(nullptr) {}
+
+  bool log(const ::mica::transaction::Transaction<StaticConfig>* tx) {
+    if (tasks == nullptr) return true;
+
+    auto task = &((*tasks)[tx->context()->thread_id()]);
+    auto tx_i = task->tx_i;
+    auto req_i = task->req_i;
+    auto commit_i = task->commit_i;
+
+    task->commit_tx_i[commit_i] = tx_i;
+    task->commit_ts[tx_i] = tx->ts();
+
+    // XXX: Assume we have the same row ordering in the read/write set.
+    uint64_t req_j = 0;
+    for (auto j = 0; j < tx->access_size(); j++) {
+      if (tx->accesses()[j].state == ::mica::transaction::RowAccessState::kPeek)
+        continue;
+
+      assert(req_j < task->req_counts[tx_i]);
+
+      task->read_ts[req_i + req_j] = tx->accesses()[j].read_rv->wts;
+      if (tx->accesses()[j].write_rv != nullptr)
+        task->write_ts[req_i + req_j] = tx->accesses()[j].write_rv->wts;
+      else
+        task->write_ts[req_i + req_j] = task->read_ts[req_i + req_j];
+      req_j++;
     }
+    assert(req_j == task->req_counts[tx_i]);
+    return true;
+  }
 
-    printf("num_rows = %" PRIu64 "\n", num_rows);
-    printf("reqs_per_tx = %" PRIu64 "\n", reqs_per_tx);
-    printf("read_ratio = %lf\n", read_ratio);
-    printf("zipf_theta = %lf\n", zipf_theta);
-    printf("tx_count = %" PRIu64 "\n", tx_count);
-    printf("num_threads = %" PRIu64 "\n", num_threads);
+  std::vector<Task>* tasks;
+};
+
+template <class Logger>
+void setup_logger(Logger* logger, std::vector<Task>* tasks) {
+  (void)logger;
+  (void)tasks;
+}
+
+template <>
+void setup_logger(VerificationLogger<DBConfig>* logger,
+                  std::vector<Task>* tasks) {
+  logger->tasks = tasks;
+}
+
+static volatile uint16_t running_threads;
+static volatile uint8_t stopping;
+
+void worker_proc(Task* task) {
+  ::mica::util::lcore.pin_thread(static_cast<uint16_t>(task->thread_id));
+
+  auto ctx = task->db->context();
+  auto tbl = task->tbl;
+  auto hash_idx = task->hash_idx;
+  auto btree_idx = task->btree_idx;
+
+  __sync_add_and_fetch(&running_threads, 1);
+  while (running_threads < task->num_threads) ::mica::util::pause();
+
+  Timing t(ctx->timing_stack(), &::mica::transaction::Stats::worker);
+
+  gettimeofday(&task->tv_start, nullptr);
+
+  uint64_t next_tx_i = 0;
+  uint64_t next_req_i = 0;
+  uint64_t commit_i = 0;
+  uint64_t scanned = 0;
+
+  task->db->activate(static_cast<uint16_t>(task->thread_id));
+  while (task->db->active_thread_count() < task->num_threads) {
+    ::mica::util::pause();
+    task->db->idle(static_cast<uint16_t>(task->thread_id));
+  }
+
+  if (kVerbose) printf("lcore %" PRIu64 "\n", task->thread_id);
+
+  Transaction tx(ctx);
+
+  while (next_tx_i < task->tx_count && !stopping) {
+    uint64_t tx_i;
+    uint64_t req_i;
+
+    tx_i = next_tx_i++;
+    req_i = next_req_i;
+    next_req_i += task->req_counts[tx_i];
+
+    task->tx_i = tx_i;
+    task->req_i = req_i;
+    task->commit_i = commit_i;
+
+    while (true) {
+      bool aborted = false;
+
+      uint64_t v = 0;
+
+      bool use_peek_only = task->read_only_tx[tx_i] != 0;
+
+      bool ret = tx.begin(use_peek_only);
+      assert(ret);
+      (void)ret;
+
+      for (uint64_t req_j = 0; req_j < task->req_counts[tx_i]; req_j++) {
+        uint64_t row_id = task->row_ids[req_i + req_j];
+        uint8_t column_id = task->column_ids[req_i + req_j];
+        bool is_read = task->op_types[req_i + req_j] == 0;
+        bool is_rmw = task->op_types[req_i + req_j] == 1;
+
+        if (hash_idx != nullptr) {
+          auto lookup_result =
+              hash_idx->lookup(&tx, row_id, kSkipValidationForIndexAccess,
+                               [&row_id](auto& k, auto& v) {
+                                 (void)k;
+                                 row_id = v;
+                                 return false;
+                               });
+          if (lookup_result != 1) {
+            assert(false);
+            tx.abort();
+            aborted = true;
+            break;
+          }
+        } else if (btree_idx != nullptr) {
+          auto lookup_result =
+              btree_idx->lookup(&tx, row_id, kSkipValidationForIndexAccess,
+                                [&row_id](auto& k, auto& v) {
+                                  (void)k;
+                                  row_id = v;
+                                  return false;
+                                });
+          if (lookup_result != 1) {
+            assert(false);
+            tx.abort();
+            aborted = true;
+            break;
+          }
+        }
+
+        if (!use_peek_only) {
+          RowAccessHandle rah(&tx);
+
+          if (is_read) {
+            if (!rah.peek_row(tbl, 0, row_id, false, true, false) ||
+                !rah.read_row()) {
+              tx.abort();
+              aborted = true;
+              break;
+            }
+
+            const char* data =
+                rah.cdata() + static_cast<uint64_t>(column_id) * kColumnSize;
+            for (uint64_t j = 0; j < kColumnSize; j += 64)
+              v += static_cast<uint64_t>(data[j]);
+            v += static_cast<uint64_t>(data[kColumnSize - 1]);
+          } else {
+            if (is_rmw) {
+              if (!rah.peek_row(tbl, 0, row_id, false, true, true) ||
+                  !rah.read_row() || !rah.write_row(kDataSize)) {
+                tx.abort();
+                aborted = true;
+                break;
+              }
+            } else {
+              if (!rah.peek_row(tbl, 0, row_id, false, false, true) ||
+                  !rah.write_row(kDataSize)) {
+                tx.abort();
+                aborted = true;
+                break;
+              }
+            }
+
+            char* data =
+                rah.data() + static_cast<uint64_t>(column_id) * kColumnSize;
+            for (uint64_t j = 0; j < kColumnSize; j += 64) {
+              v += static_cast<uint64_t>(data[j]);
+              data[j] = static_cast<char>(v);
+            }
+            v += static_cast<uint64_t>(data[kColumnSize - 1]);
+            data[kColumnSize - 1] = static_cast<char>(v);
+          }
+        } else {
+          if (!kUseScan) {
+            RowAccessHandlePeekOnly rah(&tx);
+
+            if (!rah.peek_row(tbl, 0, row_id, false, false, false)) {
+              tx.abort();
+              aborted = true;
+              break;
+            }
+
+            const char* data =
+                rah.cdata() + static_cast<uint64_t>(column_id) * kColumnSize;
+            for (uint64_t j = 0; j < kColumnSize; j += 64)
+              v += static_cast<uint64_t>(data[j]);
+            v += static_cast<uint64_t>(data[kColumnSize - 1]);
+          } else if (!kUseFullTableScan)  {
+            RowAccessHandlePeekOnly rah(&tx);
+
+            uint64_t next_row_id = row_id;
+            uint64_t next_next_raw_row_id = task->row_ids[req_i + req_j] + 1;
+            if (next_next_raw_row_id == task->num_rows)
+              next_next_raw_row_id = 0;
+
+            uint32_t scan_len = task->scan_lens[tx_i];
+            for (uint32_t scan_i = 0; scan_i < scan_len; scan_i++) {
+              uint64_t this_row_id = next_row_id;
+
+              // TODO: Support btree_idx.
+              assert(hash_idx != nullptr);
+
+              // Lookup index for next row.
+              auto lookup_result =
+                  hash_idx->lookup(&tx, next_next_raw_row_id, true,
+                                   [&next_row_id](auto& k, auto& v) {
+                                     (void)k;
+                                     next_row_id = v;
+                                     return false;
+                                   });
+              if (lookup_result != 1 ||
+                  lookup_result == HashIndex::kHaveToAbort) {
+                tx.abort();
+                aborted = true;
+                break;
+              }
+
+              // Prefetch index for next next row.
+              next_next_raw_row_id++;
+              if (next_next_raw_row_id == task->num_rows)
+                next_next_raw_row_id = 0;
+              hash_idx->prefetch(&tx, next_next_raw_row_id);
+
+              // Prefetch next row.
+              rah.prefetch_row(tbl, 0, next_row_id,
+                               static_cast<uint64_t>(column_id) * kColumnSize,
+                               kColumnSize);
+
+              // Access current row.
+              if (!rah.peek_row(tbl, 0, this_row_id, false, false, false)) {
+                tx.abort();
+                aborted = true;
+                break;
+              }
+
+              const char* data =
+                  rah.cdata() + static_cast<uint64_t>(column_id) * kColumnSize;
+              for (uint64_t j = 0; j < kColumnSize; j += 64)
+                v += static_cast<uint64_t>(data[j]);
+              v += static_cast<uint64_t>(data[kColumnSize - 1]);
+
+              rah.reset();
+            }
+
+            if (aborted) break;
+          } else /*if (kUseFullTableScan)*/ {
+            if (!tbl->scan(&tx, 0,
+                           static_cast<uint64_t>(column_id) * kColumnSize,
+                           kColumnSize, [&v, column_id](auto& rah) {
+                             const char* data =
+                                 rah.cdata() +
+                                 static_cast<uint64_t>(column_id) * kColumnSize;
+                             for (uint64_t j = 0; j < kColumnSize; j += 64)
+                               v += static_cast<uint64_t>(data[j]);
+                             v += static_cast<uint64_t>(data[kColumnSize - 1]);
+                           })) {
+              tx.abort();
+              aborted = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (aborted) continue;
+
+      Result result;
+      if (!tx.commit(&result)) continue;
+      assert(result == Result::kCommitted);
+
+      commit_i++;
+      if (kUseScan && use_peek_only) {
+        if (!kUseFullTableScan)
+          scanned += task->scan_lens[tx_i];
+        else
+          scanned += task->num_rows;
+      }
+
+      break;
+    }
+  }
+
+  task->db->deactivate(static_cast<uint16_t>(task->thread_id));
+
+  if (!stopping) stopping = 1;
+
+  task->committed = commit_i;
+  task->scanned = scanned;
+
+  gettimeofday(&task->tv_end, nullptr);
+}
+
+int main(int argc, const char* argv[]) {
+//  if (argc != 7) {
+//    printf(
+//        "%s NUM-ROWS REQS-PER-TX READ-RATIO ZIPF-THETA TX-COUNT "
+//        "THREAD-COUNT\n",
+//        argv[0]);
+//    return EXIT_FAILURE;
+//  }
+
+  auto config = ::mica::util::Config::load_file("test_tx.json");
+
+  /*uint64_t num_rows = static_cast<uint64_t>(atol(argv[1]));*/
+  uint64_t reqs_per_tx = /*static_cast<uint64_t>(atol(argv[2]));*/ 16;
+  double read_ratio = /*atof(argv[3]);*/ 0.95;
+  double zipf_theta = /*atof(argv[4]);*/ 0;
+  uint64_t tx_count = /*static_cast<uint64_t>(atol(argv[5]));*/ 1000000;
+  //uint64_t num_threads = static_cast<uint64_t>(atol(argv[6]));
+  auto num_threads = static_cast<uint64_t>(atol(argv[1]));
+  auto num_rows = static_cast<uint64_t>(atol(argv[2]));
+
+  Alloc alloc(config.get("alloc"));
+  auto page_pool_size = 24 * uint64_t(1073741824);
+  PagePool* page_pools[2];
+  // if (num_threads == 1) {
+  //   page_pools[0] = new PagePool(&alloc, page_pool_size, 0);
+  //   page_pools[1] = nullptr;
+  // } else {
+  page_pools[0] = new PagePool(&alloc, page_pool_size / 2, 0);
+  page_pools[1] = new PagePool(&alloc, page_pool_size / 2, 1);
+  // }
+
+  ::mica::util::lcore.pin_thread(0);
+
+  sw.init_start();
+  sw.init_end();
+
+  if (num_rows == 0) {
+    num_rows = SYNTH_TABLE_SIZE;
+    reqs_per_tx = REQ_PER_QUERY;
+    read_ratio = READ_PERC;
+    zipf_theta = ZIPF_THETA;
+    tx_count = MAX_TXN_PER_PART;
+    num_threads = THREAD_CNT;
 #ifndef NDEBUG
     printf("!NDEBUG\n");
+    return EXIT_FAILURE;
 #endif
-    printf("\n");
+  }
 
-    Logger logger;
-    db_ptr = new DB(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
-    DB &db = *db_ptr;
-    // DB db(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
+  printf("num_rows = %" PRIu64 "\n", num_rows);
+  printf("reqs_per_tx = %" PRIu64 "\n", reqs_per_tx);
+  printf("read_ratio = %lf\n", read_ratio);
+  printf("zipf_theta = %lf\n", zipf_theta);
+  printf("tx_count = %" PRIu64 "\n", tx_count);
+  printf("num_threads = %" PRIu64 "\n", num_threads);
+#ifndef NDEBUG
+  printf("!NDEBUG\n");
+#endif
+  printf("\n");
 
+  Logger logger;
+  DB db(page_pools, &logger, &sw, static_cast<uint16_t>(num_threads));
 
-    const uint64_t data_sizes[] = {kDataSize};
-    bool ret = db.create_table("main", 1, data_sizes);
+  const bool kVerify =
+      typeid(typename DBConfig::Logger) == typeid(VerificationLogger<DBConfig>);
+
+  const uint64_t data_sizes[] = {kDataSize};
+  bool ret = db.create_table("main", 1, data_sizes);
+  assert(ret);
+  (void)ret;
+
+  auto tbl = db.get_table("main");
+
+  db.activate(0);
+
+  HashIndex* hash_idx = nullptr;
+  if (kUseHashIndex) {
+    bool ret = db.create_hash_index_unique_u64("main_idx", tbl, 3000000);//num_rows);
     assert(ret);
     (void)ret;
 
-    auto tbl = db.get_table("main");
+    hash_idx = db.get_hash_index_unique_u64("main_idx");
+    Transaction tx(db.context(0));
+    hash_idx->init(&tx);
+  }
+
+  BTreeIndex* btree_idx = nullptr;
+  if (kUseBTreeIndex) {
+    bool ret = db.create_btree_index_unique_u64("main_idx", tbl);
+    assert(ret);
+    (void)ret;
+
+    btree_idx = db.get_btree_index_unique_u64("main_idx");
+    Transaction tx(db.context(0));
+    btree_idx->init(&tx);
+  }
+
+  {
+    printf("initializing table\n");
+
+    std::vector<std::thread> threads;
+    uint64_t init_num_threads = std::min(uint64_t(2), num_threads);
+    for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
+      threads.emplace_back([&, thread_id] {
+        ::mica::util::lcore.pin_thread(thread_id);
+
+        db.activate(static_cast<uint16_t>(thread_id));
+        while (db.active_thread_count() < init_num_threads) {
+          ::mica::util::pause();
+          db.idle(static_cast<uint16_t>(thread_id));
+        }
+
+        // Randomize the data layout by shuffling row insert order.
+        std::mt19937 g(thread_id);
+        std::vector<uint64_t> row_ids;
+        row_ids.reserve((num_rows + init_num_threads - 1) / init_num_threads);
+        for (uint64_t i = thread_id; i < num_rows; i += init_num_threads)
+          row_ids.push_back(i);
+        //std::shuffle(row_ids.begin(), row_ids.end(), g);
+
+        Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
+        const uint64_t kBatchSize = 16;
+        for (uint64_t i = 0; i < row_ids.size(); i += kBatchSize) {
+          while (true) {
+            bool ret = tx.begin();
+            if (!ret) {
+              printf("failed to start a transaction\n");
+              continue;
+            }
+
+            bool aborted = false;
+            auto i_end = std::min(i + kBatchSize, row_ids.size());
+            for (uint64_t j = i; j < i_end; j++) {
+              RowAccessHandle rah(&tx);
+              if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
+                               kDataSize)) {
+                 printf("failed to insert rows at new_row(), row = %" PRIu64
+                        "\n",
+                        j);
+                aborted = true;
+                tx.abort();
+                break;
+              }
+
+              if (kUseHashIndex) {
+                auto ret = hash_idx->insert(&tx, row_ids[j], rah.row_id());
+                if (ret != 1) {
+                   printf("failed to update index row = %" PRIu64 "\n", j);
+                  aborted = true;
+                  tx.abort();
+                  break;
+                }
+              }
+              if (kUseBTreeIndex) {
+                auto ret = btree_idx->insert(&tx, row_ids[j], rah.row_id());
+                if (ret != 1 || ret == BTreeIndex::kHaveToAbort) {
+                  // printf("failed to update index row = %" PRIu64 "\n", j);
+                  aborted = true;
+                  tx.abort();
+                  break;
+                }
+              }
+            }
+
+            if (aborted) continue;
+
+            Result result;
+            if (!tx.commit(&result)) {
+              // printf("failed to insert rows at commit(), row = %" PRIu64
+              //        "; result=%d\n",
+              //        i_end - 1, static_cast<int>(result));
+              continue;
+            }
+            break;
+          }
+        }
+
+        db.deactivate(static_cast<uint16_t>(thread_id));
+        return 0;
+      });
+    }
+
+    while (threads.size() > 0) {
+      threads.back().join();
+      threads.pop_back();
+    }
+
+    // TODO: Use multiple threads to renew rows for more balanced memory access.
 
     db.activate(0);
-
-    // jenncomment hash_idx is on a certain table
-
-    if (kUseHashIndex) {
-        bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
-        //bool ret = db.create_hash_index_nonunique_u64("main_idx", tbl, num_rows);
-        assert(ret);
-        (void)ret;
-
-        hash_idx = db.get_hash_index_unique_u64("main_idx");
-        //hash_idx = db.get_hash_index_nonunique_u64("main_idx");
-        Transaction tx(db.context(0));
-        hash_idx->init(&tx);
-    }
-
     {
-        printf("initializing table\n");
+      uint64_t i = 0;
+      tbl->renew_rows(db.context(0), 0, i, static_cast<uint64_t>(-1), false);
+    }
+    if (hash_idx != nullptr) {
+      uint64_t i = 0;
+      hash_idx->index_table()->renew_rows(db.context(0), 0, i,
+                                          static_cast<uint64_t>(-1), false);
+    }
+    if (btree_idx != nullptr) {
+      uint64_t i = 0;
+      btree_idx->index_table()->renew_rows(db.context(0), 0, i,
+                                           static_cast<uint64_t>(-1), false);
+    }
+    db.deactivate(0);
 
-        std::vector<std::thread> threads;
-        uint64_t init_num_threads = std::min(uint64_t(2), num_threads);
+    db.reset_stats();
+    db.reset_backoff();
+  }
 
-//        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
-//          uint64_t partition = threshold / init_num_threads + 1;
-//          uint64_t floor = thread_id * partition;
-//          uint64_t ceiling = floor + partition;
-//          printf("thread id %lu, floor %lu, ceiling %lu\n", thread_id, floor, ceiling);
-//          threads.emplace_back([&, thread_id, floor, ceiling] {
-//            ::mica::util::lcore.pin_thread(thread_id);
-//
-//            db.activate(static_cast<uint16_t>(thread_id));
-//            while (db.active_thread_count() < init_num_threads) {
-//                  ::mica::util::pause();
-//                  db.idle(static_cast<uint16_t>(thread_id));
-//            }
-//            unsigned long interval = 5;
-//            for (uint64_t base = floor; base < ceiling; base += interval) {
-//              Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
-//              tx.begin();
-//              for (uint64_t i = 0; i < interval; i++) {
-//                uint64_t key = base + i;
-//                uint64_t val = 1;
-//
-//                // allocate new row
-//                RowAccessHandle rah(&tx);
-//                if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)){
-//                  printf("failed to allocate new row for key %lu\n", key);
-//                  continue;
-//                }
-//
-//                // copy data into new row
-//                memcpy(&rah.data()[0], &val, sizeof(val));
-//
-//                // insert new row into index
-//                auto row_id = rah.row_id();
-//                auto insert_ret = hash_idx->insert(&tx, key, row_id);
-//                if (insert_ret != 1) {
-//                  printf("failed to insert into index for key %lu, ret %d\n",
-//                         key, insert_ret);
-//                  continue;
-//                }
-//
-//              }
-//
-//              Result result;
-//              if (!tx.commit(&result)) {
-//                printf("failed to commit on keys %lu to %lu, result %d\n",
-//                       base, base + interval, result);
-//              }
-//            }
-//            db.deactivate(static_cast<uint16_t>(thread_id));
-//            return 0;
-//
-//          });
-//
-//        }
+  std::vector<Task> tasks(num_threads);
+  setup_logger(&logger, &tasks);
+  {
+    printf("generating workload\n");
 
-
-//        for (uint64_t thread_id = 0; thread_id < init_num_threads; thread_id++) {
-//            threads.emplace_back([&, thread_id] {
-//                ::mica::util::lcore.pin_thread(thread_id);
-//
-//                db.activate(static_cast<uint16_t>(thread_id));
-//                while (db.active_thread_count() < init_num_threads) {
-//                    ::mica::util::pause();
-//                    db.idle(static_cast<uint16_t>(thread_id));
-//                }
-//
-//                // Randomize the data layout by shuffling row insert order.
-////                std::mt19937 g(thread_id);
-////                std::vector<uint64_t> row_ids;
-////                row_ids.reserve((num_rows + init_num_threads - 1) / init_num_threads);
-////                for (uint64_t i = thread_id; i < num_rows; i += init_num_threads)
-////                    row_ids.push_back(i);
-////                std::shuffle(row_ids.begin(), row_ids.end(), g);
-//
-//                /** jennsection **/
-////                std::vector<uint64_t> keys;
-////                std::vector<uint64_t> values;
-//                /** end jennsection **/
-//
-////                Transaction tx(db.context(static_cast<uint16_t>(thread_id)));
-////                const uint64_t kBatchSize = 16;
-////                for (uint64_t i = 0; i < row_ids.size(); i += kBatchSize) {
-////                    while (true) {
-////                        bool ret = tx.begin();
-////                        if (!ret) {
-////                            printf("failed to start a transaction\n");
-////                            continue;
-////                        }
-////
-////                        bool aborted = false;
-////                        auto i_end = std::min(i + kBatchSize, row_ids.size());
-////                        for (uint64_t j = i; j < i_end; j++) {
-////                            RowAccessHandle rah(&tx);
-////                            if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
-////                                             kDataSize)) {
-////                                printf("failed to insert rows at new_row(), row = %" PRIu64
-////                                       "\n",
-////                                       j);
-////                                aborted = true;
-////                                tx.abort();
-////                                break;
-////                            }
-//
-////                            if (kUseHashIndex) {
-////                                auto row_id_jenn = row_ids[j];
-////                                auto value_jenn = rah.row_id();
-////                                keys.push_back(row_id_jenn); // jennsection
-////                                values.push_back(value_jenn); // jennsection
-////                                auto ret = hash_idx->insert(&tx, row_id_jenn, value_jenn);
-////                                if (ret != 1 || ret == HashIndex::kHaveToAbort) {
-////                                    printf("failed to update index row = %" PRIu64 "\n", j);
-////                                    aborted = true;
-////                                    tx.abort();
-////                                    break;
-////                                } else {
-////                                    printf("jenndebug inserted (%lu, %lu)\n", row_id_jenn, value_jenn);
-////                                }
-////                            }
-////
-////                        }
-//
-////                        if (aborted) continue;
-////
-////                        Result result;
-////                        if (!tx.commit(&result)) {
-////                            printf("failed to insert rows at commit(), row = %" PRIu64
-////                                   "; result=%d\n",
-////                                   i_end - 1, static_cast<int>(result));
-////                            continue;
-////                        }
-////                        break;
-////                    }
-////
-////                    /** jennsection **/
-////                    //tx.begin();
-////
-////                    //uint64_t value = 0;
-////                    //for (const auto& key : keys) {
-////                    //    auto lookup_result =
-////                    //            hash_idx->lookup(&tx, key, kSkipValidationForIndexAccess,
-////                    //                             [&value](auto& k, auto& v) {
-////                    //                                 (void)k;
-////                    //                                 value = v;
-////                    //                                 return true;
-////                    //                             });
-////                    //    printf("jenndebug found %lu, (%lu, %lu)\n", lookup_result, key, value);
-////                    //}
-////                    //Result result;
-////                    //tx.commit(&result);
-////                    /** end jennsection **/
-////                    printf("jenndebug allright\n");
-////
-////                }
-////
-//                db.deactivate(static_cast<uint16_t>(thread_id));
-//                return 0;
-//            });
-//        }
-
-        while (threads.size() > 0) {
-            threads.back().join();
-            threads.pop_back();
-        }
-
-        // TODO: Use multiple threads to renew rows for more balanced memory access.
-
-        db.activate(0);
-        {
-            uint64_t i = 0;
-            tbl->renew_rows(db.context(0), 0, i, static_cast<uint64_t>(-1), false);
-        }
-        if (hash_idx != nullptr) {
-            uint64_t i = 0;
-            hash_idx->index_table()->renew_rows(db.context(0), 0, i,
-                                                static_cast<uint64_t>(-1), false);
-        }
-
-        db.deactivate(0);
-
-        db.reset_stats();
-        db.reset_backoff();
-
+    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++) {
+      tasks[thread_id].thread_id = static_cast<uint16_t>(thread_id);
+      tasks[thread_id].num_threads = num_threads;
+      tasks[thread_id].db = &db;
+      tasks[thread_id].tbl = tbl;
+      tasks[thread_id].hash_idx = hash_idx;
+      tasks[thread_id].btree_idx = btree_idx;
     }
 
-    RunServer(num_threads);
+    if (kUseContendedSet) zipf_theta = 0.;
 
-  return 0;
+    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++) {
+      auto req_counts = reinterpret_cast<uint16_t*>(
+          alloc.malloc_contiguous(sizeof(uint16_t) * tx_count, thread_id));
+      auto read_only_tx = reinterpret_cast<uint8_t*>(
+          alloc.malloc_contiguous(sizeof(uint8_t) * tx_count, thread_id));
+      uint32_t* scan_lens = nullptr;
+      if (kUseScan)
+        scan_lens = reinterpret_cast<uint32_t*>(
+            alloc.malloc_contiguous(sizeof(uint32_t) * tx_count, thread_id));
+      auto row_ids = reinterpret_cast<uint64_t*>(alloc.malloc_contiguous(
+          sizeof(uint64_t) * tx_count * reqs_per_tx, thread_id));
+      auto column_ids = reinterpret_cast<uint8_t*>(alloc.malloc_contiguous(
+          sizeof(uint8_t) * tx_count * reqs_per_tx, thread_id));
+      auto op_types = reinterpret_cast<uint8_t*>(alloc.malloc_contiguous(
+          sizeof(uint8_t) * tx_count * reqs_per_tx, thread_id));
+      assert(req_counts);
+      assert(row_ids);
+      assert(column_ids);
+      assert(op_types);
+      tasks[thread_id].num_rows = num_rows;
+      tasks[thread_id].tx_count = tx_count;
+      tasks[thread_id].req_counts = req_counts;
+      tasks[thread_id].read_only_tx = read_only_tx;
+      tasks[thread_id].scan_lens = scan_lens;
+      tasks[thread_id].row_ids = row_ids;
+      tasks[thread_id].column_ids = column_ids;
+      tasks[thread_id].op_types = op_types;
+
+      if (kVerify) {
+        auto commit_tx_i = reinterpret_cast<uint64_t*>(
+            alloc.malloc_contiguous(sizeof(uint64_t) * tx_count, thread_id));
+        auto commit_ts = reinterpret_cast<Timestamp*>(
+            alloc.malloc_contiguous(sizeof(Timestamp) * tx_count, thread_id));
+        auto read_ts = reinterpret_cast<Timestamp*>(alloc.malloc_contiguous(
+            sizeof(Timestamp) * tx_count * reqs_per_tx, thread_id));
+        auto write_ts = reinterpret_cast<Timestamp*>(alloc.malloc_contiguous(
+            sizeof(Timestamp) * tx_count * reqs_per_tx, thread_id));
+        assert(commit_tx_i);
+        assert(commit_ts);
+        assert(read_ts);
+        ::mica::util::memset(commit_tx_i, 0, sizeof(uint64_t) * tx_count);
+        ::mica::util::memset(commit_ts, 0, sizeof(Timestamp) * tx_count);
+        ::mica::util::memset(read_ts, 0,
+                             sizeof(Timestamp) * tx_count * reqs_per_tx);
+        ::mica::util::memset(write_ts, 0,
+                             sizeof(Timestamp) * tx_count * reqs_per_tx);
+        tasks[thread_id].commit_tx_i = commit_tx_i;
+        tasks[thread_id].commit_ts = commit_ts;
+        tasks[thread_id].read_ts = read_ts;
+        tasks[thread_id].write_ts = write_ts;
+      }
+    }
+
+    std::vector<std::thread> threads;
+    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++) {
+      threads.emplace_back([&, thread_id] {
+        ::mica::util::lcore.pin_thread(thread_id);
+
+        uint64_t seed = 4 * thread_id * ::mica::util::rdtsc();
+        uint64_t seed_mask = (uint64_t(1) << 48) - 1;
+        ::mica::util::ZipfGen zg(num_rows, zipf_theta, seed & seed_mask);
+        ::mica::util::Rand op_type_rand((seed + 1) & seed_mask);
+        ::mica::util::Rand column_id_rand((seed + 2) & seed_mask);
+        ::mica::util::Rand scan_len_rand((seed + 3) & seed_mask);
+        uint32_t read_threshold =
+            (uint32_t)(read_ratio * (double)((uint32_t)-1));
+        uint32_t rmw_threshold =
+            (uint32_t)(kReadModifyWriteRatio * (double)((uint32_t)-1));
+
+        uint64_t req_offset = 0;
+
+        for (uint64_t tx_i = 0; tx_i < tx_count; tx_i++) {
+          bool read_only_tx = true;
+
+          for (uint64_t req_i = 0; req_i < reqs_per_tx; req_i++) {
+            size_t row_id;
+            while (true) {
+              if (kUseContendedSet) {
+                if (req_i < kContendedReqPerTX)
+                  row_id =
+                      (zg.next() * 0x9ddfea08eb382d69ULL) % kContendedSetSize;
+                else
+                  row_id = (zg.next() * 0x9ddfea08eb382d69ULL) %
+                               (num_rows - kContendedSetSize) +
+                           kContendedSetSize;
+              } else {
+                row_id = (zg.next() * 0x9ddfea08eb382d69ULL) % num_rows;
+              }
+              // Avoid duplicate row IDs in a single transaction.
+              uint64_t req_j;
+              for (req_j = 0; req_j < req_i; req_j++)
+                if (tasks[thread_id].row_ids[req_offset + req_j] == row_id)
+                  break;
+              if (req_j == req_i) break;
+            }
+            uint8_t column_id = static_cast<uint8_t>(column_id_rand.next_u32() %
+                                                     (kDataSize / kColumnSize));
+            tasks[thread_id].row_ids[req_offset + req_i] = row_id;
+            tasks[thread_id].column_ids[req_offset + req_i] = column_id;
+
+            if (op_type_rand.next_u32() <= read_threshold)
+              tasks[thread_id].op_types[req_offset + req_i] = 0;
+            else {
+              tasks[thread_id].op_types[req_offset + req_i] =
+                  op_type_rand.next_u32() <= rmw_threshold ? 1 : 2;
+              read_only_tx = false;
+            }
+          }
+          tasks[thread_id].req_counts[tx_i] =
+              static_cast<uint16_t>(reqs_per_tx);
+          tasks[thread_id].read_only_tx[tx_i] =
+              static_cast<uint8_t>(read_only_tx);
+          if (kUseScan) {
+            tasks[thread_id].scan_lens[tx_i] =
+                scan_len_rand.next_u32() % (kMaxScanLen - 1) + 1;
+          }
+          req_offset += reqs_per_tx;
+        }
+      });
+    }
+
+    while (threads.size() > 0) {
+      threads.back().join();
+      threads.pop_back();
+    }
+  }
+
+  // tbl->print_table_status();
+  //
+  // if (kShowPoolStats) db.print_pool_status();
+
+  // For verification.
+  std::vector<Timestamp> table_ts;
+
+  for (auto phase = 0; phase < 2; phase++) {
+    // if (kVerify && phase == 0) {
+    //   printf("skipping warming up\n");
+    //   continue;
+    // }
+
+    if (kVerify && phase == 1) {
+      for (uint64_t row_id = 0; row_id < num_rows; row_id++) {
+        auto rv = tbl->latest_rv(0, row_id);
+        table_ts.push_back(rv->wts);
+      }
+    }
+
+    if (phase == 0)
+      printf("warming up\n");
+    else {
+      db.reset_stats();
+      printf("executing workload\n");
+    }
+
+    running_threads = 0;
+    stopping = 0;
+
+    ::mica::util::memory_barrier();
+
+    std::vector<std::thread> threads;
+    for (uint64_t thread_id = 1; thread_id < num_threads; thread_id++)
+      threads.emplace_back(worker_proc, &tasks[thread_id]);
+
+    if (phase != 0 && kRunPerf) {
+      int r = system("perf record -a sleep 1 &");
+      // int r = system("perf record -a -g sleep 1 &");
+      (void)r;
+    }
+
+    worker_proc(&tasks[0]);
+
+    while (threads.size() > 0) {
+      threads.back().join();
+      threads.pop_back();
+    }
+  }
+  printf("\n");
+
+  {
+    double diff;
+    {
+      double min_start = 0.;
+      double max_end = 0.;
+      for (size_t thread_id = 0; thread_id < num_threads; thread_id++) {
+        double start = (double)tasks[thread_id].tv_start.tv_sec * 1. +
+                       (double)tasks[thread_id].tv_start.tv_usec * 0.000001;
+        double end = (double)tasks[thread_id].tv_end.tv_sec * 1. +
+                     (double)tasks[thread_id].tv_end.tv_usec * 0.000001;
+        if (thread_id == 0 || min_start > start) min_start = start;
+        if (thread_id == 0 || max_end < end) max_end = end;
+      }
+
+      diff = max_end - min_start;
+    }
+    double total_time = diff * static_cast<double>(num_threads);
+
+    uint64_t total_committed = 0;
+    uint64_t total_scanned = 0;
+    for (size_t thread_id = 0; thread_id < num_threads; thread_id++) {
+      total_committed += tasks[thread_id].committed;
+      if (kUseScan) total_scanned += tasks[thread_id].scanned;
+    }
+    printf("throughput:                   %7.3lf M/sec\n",
+           static_cast<double>(total_committed) / diff * 0.000001);
+    if (kUseScan)
+      printf("scan throughput:              %7.3lf M/sec\n",
+             static_cast<double>(total_scanned) / diff * 0.000001);
+
+    db.print_stats(diff, total_time);
+
+    tbl->print_table_status();
+
+    if (hash_idx != nullptr) hash_idx->index_table()->print_table_status();
+    if (btree_idx != nullptr) btree_idx->index_table()->print_table_status();
+
+    if (kShowPoolStats) db.print_pool_status();
+  }
+
+  if (kVerify) {
+    printf("verifying\n");
+    const bool print_verification = false;
+    // const bool print_verification = true;
+
+    if (kUseSnapshot)
+      printf(
+          "warning: verification currently does not support transactions using "
+          "snapshots\n");
+
+    uint64_t total_tx_i = 0;
+    uint64_t current_commit_i[num_threads];
+    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++)
+      current_commit_i[thread_id] = 0;
+
+    while (true) {
+      // Simple but slow way to find the next executed transaction.
+      uint64_t next_thread_id = static_cast<uint64_t>(-1);
+      Timestamp next_ts = Timestamp::make(0, 0, 0);
+      for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++) {
+        Task* task = &tasks[thread_id];
+
+        if (current_commit_i[thread_id] >= task->committed) continue;
+
+        uint64_t tx_i = task->commit_tx_i[current_commit_i[thread_id]];
+        if (next_ts > task->commit_ts[tx_i] ||
+            next_thread_id == static_cast<uint64_t>(-1)) {
+          next_thread_id = thread_id;
+          next_ts = task->commit_ts[tx_i];
+        }
+      }
+      if (next_thread_id == static_cast<uint64_t>(-1)) break;
+
+      Task* task = &tasks[next_thread_id];
+      uint64_t tx_i = task->commit_tx_i[current_commit_i[next_thread_id]];
+      // XXX: Assume the constant number of reqs per tx.
+      uint64_t total_req_i = reqs_per_tx * tx_i;
+
+      if (print_verification)
+        printf("thread=%2" PRIu64 " tx=%" PRIu64 " commit_ts=0x%" PRIx64 "\n",
+               next_thread_id, tx_i, next_ts.t2);
+
+      for (uint64_t req_j = 0; req_j < task->req_counts[tx_i]; req_j++) {
+        const Timestamp& read_ts = task->read_ts[total_req_i + req_j];
+        const Timestamp& write_ts = task->write_ts[total_req_i + req_j];
+        uint64_t row_id = task->row_ids[total_req_i + req_j];
+        bool is_read = task->op_types[total_req_i + req_j] == 0;
+        bool is_rmw = task->op_types[total_req_i + req_j] == 1;
+
+        if (print_verification)
+          printf("  req %2" PRIu64 " row=%9" PRIu64
+                 " is_read=%d read_ts=0x%" PRIx64 "\n",
+                 req_j, row_id, is_read ? 1 : 0, read_ts.t2);
+
+        // The read set timestamp must be smaller than the commit timestamp
+        // (consistency).
+        if (read_ts >= next_ts) {
+          printf("verification failed at %" PRIu64
+                 " (read ts must predate commit ts)\n",
+                 total_tx_i);
+          assert(false);
+          return 1;
+        }
+
+        if (is_read || is_rmw) {
+          // There must be no extra version between the read and commit
+          // timestamp unless it is a write-only operation (atomicity).
+          const Timestamp& stored_ts = table_ts[row_id];
+          if (stored_ts != read_ts) {
+            printf("verification failed at %" PRIu64
+                   " (read ts mismatch; expected 0x%" PRIx64 ", got 0x%" PRIx64
+                   ")\n",
+                   total_tx_i, read_ts.t2, stored_ts.t2);
+            assert(false);
+            return 1;
+          }
+        }
+
+        // Register the new version.  It is guaranteed to be the latest version
+        // because we chose the transaction in their commit ts order.
+        // if (!is_read) table_ts[row_id] = next_ts;
+        // Since we now have a promotion, a read may be actually a write.
+        // It keeps the old timestamp or updated to the transaction's timestamp.
+        assert(write_ts == read_ts || write_ts == next_ts);
+        table_ts[row_id] = write_ts;
+      }
+
+      current_commit_i[next_thread_id]++;
+      total_tx_i++;
+    }
+
+    // Final check.
+    for (uint64_t row_id = 0; row_id < num_rows; row_id++) {
+      auto stored_ts = table_ts[row_id];
+      auto rv = tbl->latest_rv(0, row_id);
+      auto read_ts = rv->wts;
+
+      if (stored_ts != read_ts) {
+        printf("verification failed at %" PRIu64
+               " (read ts mismatch; expected 0x%" PRIx64 ", got 0x%" PRIx64
+               ")\n",
+               total_tx_i, read_ts.t2, stored_ts.t2);
+        assert(false);
+        return 1;
+      }
+    }
+
+    printf("passed verification\n");
+    printf("\n");
+  }
+
+  {
+    printf("cleaning up\n");
+    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++) {
+      alloc.free_contiguous(tasks[thread_id].req_counts);
+      alloc.free_contiguous(tasks[thread_id].read_only_tx);
+      if (kUseScan) alloc.free_contiguous(tasks[thread_id].scan_lens);
+      alloc.free_contiguous(tasks[thread_id].row_ids);
+      alloc.free_contiguous(tasks[thread_id].column_ids);
+      alloc.free_contiguous(tasks[thread_id].op_types);
+      if (kVerify) {
+        alloc.free_contiguous(tasks[thread_id].commit_tx_i);
+        alloc.free_contiguous(tasks[thread_id].commit_ts);
+        alloc.free_contiguous(tasks[thread_id].read_ts);
+        alloc.free_contiguous(tasks[thread_id].write_ts);
+      }
+    }
+  }
+
+//  // init table
+//  printf("jenndebug\n");
+//  printf("jenndebug2\n");
+//  printf("jenndebug3\n");
+//  uint64_t single_init_thread = 0;
+//  db.deactivate(0);
+//  ::mica::util::lcore.pin_thread(static_cast<size_t>(single_init_thread));
+//  db.activate(static_cast<uint16_t>(single_init_thread));
+//  int batch = 1;
+//  for (int i = 0; i < 1000000; i += batch) {
+//    Transaction tx(db.context(static_cast<uint16_t>(single_init_thread)));
+//    if (!tx.begin()) {
+//      printf("jenndebug tx.begin() failed on i=%d\n", i);
+//      assert(false);
+//    }
+//    for (int j = i; j < i+batch; j++) {
+//      printf("jenndebug about to start j=%d, access_size()=%d\n", j, tx.access_size());
+//
+//      RowAccessHandle rah(&tx);
+//      auto row_id = static_cast<uint64_t>(-214);
+//      if (hash_idx->lookup(&tx, static_cast<const unsigned long>(j), true,
+//                           [&row_id](auto& k, auto& v) {
+//                             (void)k;
+//                             row_id = v;
+//                             return false;
+//                           }) == 1) {
+//        // value already exists, just update it
+//        printf("jenndebug hash_idx lookup\n");
+//        if (!rah.peek_row(tbl, 0, row_id, true, true, true) ||
+//            !rah.write_row()) {
+//          // failed to write
+//          tx.abort();
+//          printf("jenndebug failed to write to existing row j=%d\n", j);
+//          assert(false);
+//        }
+//        printf("jenndebug peek_row\n");
+//      } else {
+//        // value does not exist yet. Create row and insert into index.
+//
+//        // make new row
+//        printf("jenndebug hash_idx lookup2\n");
+//        if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
+//          tx.abort();
+//          printf("jenndebug failed to allocate new row for j=%d\n", j);
+//          assert(false);
+//        }
+//        printf("jenndebug new_row\n");
+//      }
+//      memcpy(&rah.data()[0], &j, sizeof(j));
+//
+//      // insert into index
+//      row_id = rah.row_id();
+//      if (hash_idx->insert(&tx, static_cast<const unsigned long>(j), row_id) != 1) {
+//        tx.abort();
+//        printf("jenndebug failed to insert row into hash index j=%d\n", j);
+//        assert(false);
+//      } else {
+//        printf("jenndebug finished j=%d, access_size()=%d\n", j,
+//               tx.access_size());
+//        printf("jenndebug hash_idx insert=====================\n");
+//      }
+//    }
+//
+//    Result result;
+//    if (!tx.commit(&result)) {
+//      tx.abort();
+//      printf("jenndebug tx.commit() failed on i=%d, result=%d\n", i, result);
+//      assert(false);
+//    }
+//    printf("jenndebug commit\n");
+//  }
+//
+//  db.deactivate(static_cast<uint16_t>(single_init_thread));
+
+  RunServer(num_threads, &db, hash_idx);
+
+
+  return EXIT_SUCCESS;
 }
