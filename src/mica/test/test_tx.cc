@@ -174,7 +174,6 @@ class ServerImpl final {
               return;
             }
             memcpy(&rah.data()[0], &val, sizeof(val));
-            printf("jenndebug value exists already\n");
           } else {
             // value does not exist yet. Create row and insert into index.
 
@@ -201,9 +200,7 @@ class ServerImpl final {
               return;
             }
           }
-          printf("jenndebug key %lu, val %lu\n", key, val);
         }
-        printf("jenndebug tx.access_size()=%d\n", tx.access_size());
 
         // commit
         Result result;
@@ -747,7 +744,6 @@ int main(int argc, const char* argv[]) {
             bool aborted = false;
             auto i_end = std::min(i + kBatchSize, row_ids.size());
             for (uint64_t j = i; j < i_end; j++) {
-              printf("jenndebug tx.access_size %d\n", tx.access_size());
               RowAccessHandle rah(&tx);
               if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true,
                                kDataSize)) {
@@ -768,7 +764,6 @@ int main(int argc, const char* argv[]) {
                   break;
                 }
               }
-              printf("jenndebug tx.access_size now %d, row=%lu\n", tx.access_size(), row_ids[j]);
               if (kUseBTreeIndex) {
                 auto ret = btree_idx->insert(&tx, row_ids[j], rah.row_id());
                 if (ret != 1 || ret == BTreeIndex::kHaveToAbort) {
@@ -780,7 +775,6 @@ int main(int argc, const char* argv[]) {
               }
             }
 
-            printf("jenndebug ===============\n");
             if (aborted) continue;
 
             Result result;
