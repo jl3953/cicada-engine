@@ -690,7 +690,7 @@ int main(int argc, const char* argv[]) {
 
   HashIndex* hash_idx = nullptr;
   if (kUseHashIndex) {
-    bool ret = db.create_hash_index_unique_u64("main_idx", tbl, 3000000);//num_rows);
+    bool ret = db.create_hash_index_unique_u64("main_idx", tbl, num_rows);
     assert(ret);
     (void)ret;
 
@@ -1186,79 +1186,117 @@ int main(int argc, const char* argv[]) {
     }
   }
 
-//  // init table
-//  printf("jenndebug\n");
+  // init table
+  printf("jenndebug starting to initialize table\n");
 //  printf("jenndebug2\n");
 //  printf("jenndebug3\n");
-//  uint64_t single_init_thread = 0;
-//  db.deactivate(0);
-//  ::mica::util::lcore.pin_thread(static_cast<size_t>(single_init_thread));
-//  db.activate(static_cast<uint16_t>(single_init_thread));
-//  int batch = 1;
-//  for (int i = 0; i < 1000000; i += batch) {
-//    Transaction tx(db.context(static_cast<uint16_t>(single_init_thread)));
-//    if (!tx.begin()) {
-//      printf("jenndebug tx.begin() failed on i=%d\n", i);
-//      assert(false);
-//    }
-//    for (int j = i; j < i+batch; j++) {
-//      printf("jenndebug about to start j=%d, access_size()=%d\n", j, tx.access_size());
-//
-//      RowAccessHandle rah(&tx);
-//      auto row_id = static_cast<uint64_t>(-214);
-//      if (hash_idx->lookup(&tx, static_cast<const unsigned long>(j), true,
-//                           [&row_id](auto& k, auto& v) {
-//                             (void)k;
-//                             row_id = v;
-//                             return false;
-//                           }) == 1) {
-//        // value already exists, just update it
-//        printf("jenndebug hash_idx lookup\n");
-//        if (!rah.peek_row(tbl, 0, row_id, true, true, true) ||
-//            !rah.write_row()) {
-//          // failed to write
-//          tx.abort();
-//          printf("jenndebug failed to write to existing row j=%d\n", j);
-//          assert(false);
-//        }
-//        printf("jenndebug peek_row\n");
-//      } else {
-//        // value does not exist yet. Create row and insert into index.
-//
-//        // make new row
-//        printf("jenndebug hash_idx lookup2\n");
-//        if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
-//          tx.abort();
-//          printf("jenndebug failed to allocate new row for j=%d\n", j);
-//          assert(false);
-//        }
-//        printf("jenndebug new_row\n");
-//      }
-//      memcpy(&rah.data()[0], &j, sizeof(j));
-//
-//      // insert into index
-//      row_id = rah.row_id();
-//      if (hash_idx->insert(&tx, static_cast<const unsigned long>(j), row_id) != 1) {
-//        tx.abort();
-//        printf("jenndebug failed to insert row into hash index j=%d\n", j);
-//        assert(false);
-//      } else {
-//        printf("jenndebug finished j=%d, access_size()=%d\n", j,
-//               tx.access_size());
-//        printf("jenndebug hash_idx insert=====================\n");
-//      }
-//    }
-//
-//    Result result;
-//    if (!tx.commit(&result)) {
-//      tx.abort();
-//      printf("jenndebug tx.commit() failed on i=%d, result=%d\n", i, result);
-//      assert(false);
-//    }
-//    printf("jenndebug commit\n");
-//  }
-//
-//  db.deactivate(static_cast<uint16_t>(single_init_thread));
+  uint64_t single_init_thread = 0;
+  db.deactivate(static_cast<uint16_t>(single_init_thread));
+  ::mica::util::lcore.pin_thread(static_cast<size_t>(single_init_thread));
+  db.activate(static_cast<uint16_t>(single_init_thread));
+  uint64_t batch = 1;
+  for (uint64_t i = 0; i < num_rows; i += batch) {
+    Transaction tx(db.context(static_cast<uint16_t>(single_init_thread)));
+    if (!tx.begin()) {
+      printf("jenndebug tx.begin() failed on i=%lu\n", i);
+      assert(false);
+    }
+    for (uint64_t j = i; j < i+batch; j++) {
+      //printf("jenndebug about to start j=%d, access_size()=%d\n", j, tx.access_size());
+
+      RowAccessHandle rah(&tx);
+      auto row_id = static_cast<uint64_t>(-214);
+      if (hash_idx->lookup(&tx, static_cast<const unsigned long>(j), true,
+                           [&row_id](auto& k, auto& v) {
+                             (void)k;
+                             row_id = v;
+                             return false;
+                           }) == 1) {
+        // value already exists, just update it
+        if (!rah.peek_row(tbl, 0, row_id, true, true, true) ||
+            !rah.write_row()) {
+          // failed to write
+          tx.abort();
+          printf("jenndebug failed to write to existing row j=%lu\n", j);
+          assert(false);
+        }
+      } else {
+        // value does not exist yet. Create row and insert into index.
+
+        // make new row
+        if (!rah.new_row(tbl, 0, Transaction::kNewRowID, true, kDataSize)) {
+          tx.abort();
+          printf("jenndebug failed to allocate new row for j=%lu\n", j);
+          assert(false);
+        }
+
+        // insert into index
+        row_id = rah.row_id();
+        if (hash_idx->insert(&tx, static_cast<const unsigned long>(j), row_id) != 1) {
+          tx.abort();
+          printf("jenndebug failed to insert row into hash index j=%lu\n", j);
+          assert(false);
+        }
+      }
+
+      memcpy(&rah.data()[0], &j, sizeof(j));
+      //printf("jenndebug wrote key %lu val %lu\n", j, j);
+    }
+
+    Result result;
+    if (!tx.commit(&result)) {
+      tx.abort();
+      printf("jenndebug tx.commit() failed on i=%lu, result=%d\n", i, result);
+      assert(false);
+    }
+  }
+
+  uint64_t key = num_rows - 1;
+  uint64_t val;
+  Transaction tx(db.context(static_cast<uint16_t>(single_init_thread)));
+  if (!tx.begin()) {
+    printf("jenndebug tx.begin() failed on final read check\n");
+    assert(false);
+  }
+
+  RowAccessHandle rah(&tx);
+  auto row_id = static_cast<uint64_t>(-214);
+  if (hash_idx->lookup(&tx, static_cast<const unsigned long>(key), true,
+                       [&row_id](auto& k, auto& v) {
+                         (void)k;
+                         row_id = v;
+                         return false;
+                       }) == 1) {
+    // value already exists, just update it
+    if (!rah.peek_row(tbl, 0, row_id, true, true, false) || !rah.read_row()) {
+      // failed to read row
+      tx.abort();
+      printf("jenndebug failed to read last value for final check\n");
+      assert(false);
+    } else {
+      memcpy(&val, &rah.cdata()[0], sizeof(val));
+    }
+  } else {
+    tx.abort();
+    printf("jenndebug failed to find last value for final check in index\n");
+    assert(false);
+  }
+
+  Result result;
+  if (!tx.commit(&result)) {
+    tx.abort();
+    printf("jenndebug failed to commit final read check\n");
+    assert(false);
+  }
+
+  if (val != key) {
+    printf("jenndebug final read check val %lu does not match key %lu\n", val, key);
+    assert(false);
+  } else {
+    printf("jenndebug all %lu keys have been inserted!\n", num_rows-1);
+  }
+
+  db.deactivate(static_cast<uint16_t>(single_init_thread));
 
   RunServer(num_threads, &db, hash_idx);
 
