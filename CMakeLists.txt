@@ -112,21 +112,27 @@ endif()
 # Proto file
 get_filename_component(hw_proto "src/mica/protos/smdbrpc.proto" ABSOLUTE)
 get_filename_component(hw_proto_path "${hw_proto}" PATH)
+get_filename_component(hw_proto_demote "src/mica/protos/demotehotkeys.proto" ABSOLUTE)
+get_filename_component(hw_proto_path_demote "${hw_proto_demote}" PATH)
 
 # Generated sources
 set(hw_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/smdbrpc.pb.cc")
 set(hw_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/smdbrpc.pb.h")
 set(hw_grpc_srcs  "${CMAKE_CURRENT_BINARY_DIR}/smdbrpc.grpc.pb.cc")
 set(hw_grpc_hdrs  "${CMAKE_CURRENT_BINARY_DIR}/smdbrpc.grpc.pb.h")
+set(hw_proto_srcs_demote "${CMAKE_CURRENT_BINARY_DIR}/demotehotkeys.pb.cc")
+set(hw_proto_hdrs_demote "${CMAKE_CURRENT_BINARY_DIR}/demotehotkeys.pb.h")
+set(hw_grpc_srcs_demote "${CMAKE_CURRENT_BINARY_DIR}/demotehotkeys.grpc.pb.cc")
+set(hw_grpc_hdrs_demote "${CMAKE_CURRENT_BINARY_DIR}/demotehotkeys.grpc.pb.h")
 add_custom_command(
-    OUTPUT "${hw_proto_srcs}" "${hw_proto_hdrs}" "${hw_grpc_srcs}" "${hw_grpc_hdrs}"
+    OUTPUT "${hw_proto_srcs}" "${hw_proto_hdrs}" "${hw_grpc_srcs}" "${hw_grpc_hdrs}" "${hw_proto_srcs_demote}" "${hw_proto_hdrs_demote}" "${hw_grpc_srcs_demote}" "${hw_grpc_hdrs_demote}"
     COMMAND ${_PROTOBUF_PROTOC}
     ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}"
     --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
-    -I "${hw_proto_path}"
+    -I "${hw_proto_path}" -I "${hw_proto_path_demote}"
     --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
-    "${hw_proto}"
-    DEPENDS "${hw_proto}")
+    "${hw_proto}" "${hw_proto_demote}"
+    DEPENDS "${hw_proto}" "${hw_proto_demote}")
 
 # Include generated *.pb.h files
 include_directories("src/mica/protos")
@@ -194,7 +200,7 @@ ENDIF(LTO)
 
 # IF(AVX2)
 
-#   MESSAGE(STATUS "AVX2 is enabled (to disable, run `cmake .. -DAVX2=OFF`)")
+#   MESSAGE(STATUS  "AVX2 is enabled (to disable, run `cmake .. -DAVX2=OFF`)")
 #   ADD_DEFINITIONS(-mavx2)
 #   SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mavx2")
 
@@ -215,6 +221,7 @@ SET_SOURCE_FILES_PROPERTIES(src/mica/util/siphash/siphash24.c PROPERTIES LANGUAG
 SET(SOURCES ${SOURCES} src/mica/util/lcore.cc)
 SET(SOURCES ${SOURCES} src/mica/util/stopwatch.cc)
 SET(SOURCES ${SOURCES} src/mica/util/zipf.cc)
+SET(SOURCES ${SOURCES} src/mica/grpcsrc/demotehotkeys_client.cc)
 
 SET(LIBRARIES ${LIBRARIES} rt numa pthread)
 
@@ -244,6 +251,11 @@ IF(LTO)
   TARGET_LINK_LIBRARIES(hotshard_gateway_server ${LIBRARIES}
       ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
 
+  ADD_EXECUTABLE(demotehotkeys_client src/mica/test/demotehotkeys_client_run.cc ${SOURCES}
+      ${hw_proto_srcs} ${hw_grpc_srcs} ${hw_proto_srcs_demote} ${hw_grpc_srcs_demote})
+  TARGET_LINK_LIBRARIES(demotehotkeys_client ${LIBRARIES}
+      ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
+
 ELSE(LTO)
 
   ADD_LIBRARY(common ${SOURCES})
@@ -266,6 +278,11 @@ ELSE(LTO)
   ADD_EXECUTABLE(hotshard_gateway_server src/mica/test/hotshard_gateway_server.cc ${SOURCES}
       ${hw_proto_srcs} ${hw_grpc_srcs})
   TARGET_LINK_LIBRARIES(hotshard_gateway_server ${LIBRARIES}
+      ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
+
+  ADD_EXECUTABLE(demotehotkeys_client src/mica/test/demotehotkeys_client_run.cc ${SOURCES}
+      ${hw_proto_srcs} ${hw_grpc_srcs} ${hw_proto_srcs_demote} ${hw_grpc_srcs_demote})
+  TARGET_LINK_LIBRARIES(demotehotkeys_client ${LIBRARIES}
       ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
 
 ENDIF(LTO)
