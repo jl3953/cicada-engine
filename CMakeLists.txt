@@ -221,7 +221,7 @@ SET_SOURCE_FILES_PROPERTIES(src/mica/util/siphash/siphash24.c PROPERTIES LANGUAG
 SET(SOURCES ${SOURCES} src/mica/util/lcore.cc)
 SET(SOURCES ${SOURCES} src/mica/util/stopwatch.cc)
 SET(SOURCES ${SOURCES} src/mica/util/zipf.cc)
-SET(SOURCES ${SOURCES} src/mica/grpcsrc/demotehotkeys_client.cc)
+#SET(SOURCES ${SOURCES} src/mica/grpcsrc/demotehotkeys_client.cc)
 
 SET(LIBRARIES ${LIBRARIES} rt numa pthread)
 
@@ -280,7 +280,9 @@ ELSE(LTO)
   TARGET_LINK_LIBRARIES(hotshard_gateway_server ${LIBRARIES}
       ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
 
-  ADD_EXECUTABLE(demotehotkeys_client src/mica/test/demotehotkeys_client_run.cc ${SOURCES}
+  ADD_EXECUTABLE(demotehotkeys_client src/mica/test/demotehotkeys_client_run.cc
+      src/mica/grpcsrc/demotehotkeys_client.cc
+      ${SOURCES}
       ${hw_proto_srcs} ${hw_grpc_srcs} ${hw_proto_srcs_demote} ${hw_grpc_srcs_demote})
   TARGET_LINK_LIBRARIES(demotehotkeys_client ${LIBRARIES}
       ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
